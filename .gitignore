@@ -26,3 +26,6 @@ go.work.sum
 
 # logging files
 *.log
+
+# claude cmds
+.claude/settings.local.json
