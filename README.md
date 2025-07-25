@@ -95,8 +95,8 @@ Force certificate renewal regardless of expiration:
 | Option | Environment Variable | Description | Default | Required |
 |--------|---------------------|-------------|---------|----------|
 | `--hostname` | `ESXI_HOSTNAME` | ESXi host FQDN (certificate subject) | | Yes |
-| `--domain` | `ESXI_DOMAIN` | DNS domain managed by Route53 (for DNS validation) | | Yes (unless dry-run) |
-| `--email` | `ESXI_EMAIL` | Email for Let's Encrypt registration | | Yes (unless dry-run) |
+| `--domain` | `AWS_ROUTE53_DOMAIN` | DNS domain managed by Route53 (for DNS validation) | | Yes (unless dry-run) |
+| `--email` | `EMAIL` | Email for Let's Encrypt registration | | Yes (unless dry-run) |
 | `--esxi-user` | `ESXI_USERNAME` | ESXi username | | Yes (unless dry-run) |
 | `--esxi-pass` | `ESXI_PASSWORD` | ESXi password | | Yes (unless dry-run) |
 | `--aws-key-id` | `AWS_ACCESS_KEY_ID` | AWS Access Key ID | | Yes |
@@ -108,12 +108,12 @@ Force certificate renewal regardless of expiration:
 |--------|---------------------|-------------|---------|----------|
 | `--aws-session-token` | `AWS_SESSION_TOKEN` | AWS Session Token (for temporary credentials) | | No |
 | `--aws-region` | `AWS_REGION` | AWS Region for Route53 | us-east-1 | No |
-| `--threshold` | `ESXI_THRESHOLD` | Renewal threshold (remaining lifetime fraction) | 0.33 (33%) | No |
-| `--key-size` | `ESXI_KEY_SIZE` | RSA key size for certificates (2048, 4096) - generates SHA256WithRSA signatures | 4096 | No |
-| `--log` | `ESXI_LOG_FILE` | Path to log file | ./lab-update-esxi-cert.log | No |
-| `--log-level` | `ESXI_LOG_LEVEL` | Log level (ERROR, WARN, INFO, DEBUG) | INFO | No |
-| `--dry-run` | `ESXI_DRY_RUN` | Check certificate without renewal | false | No |
-| `--force` | `ESXI_FORCE` | Force certificate renewal regardless of expiration threshold | false | No |
+| `--threshold` | `CERT_THRESHOLD` | Renewal threshold (remaining lifetime fraction) | 0.33 (33%) | No |
+| `--key-size` | `CERT_KEY_SIZE` | RSA key size for certificates (2048, 4096) - generates SHA256WithRSA signatures | 4096 | No |
+| `--log` | `LOG_FILE` | Path to log file | ./lab-update-esxi-cert.log | No |
+| `--log-level` | `LOG_LEVEL` | Log level (ERROR, WARN, INFO, DEBUG) | INFO | No |
+| `--dry-run` | `DRY_RUN` | Check certificate without renewal | false | No |
+| `--force` | `FORCE_RENEWAL` | Force certificate renewal regardless of expiration threshold | false | No |
 
 ## Certificate Renewal Logic
 
@@ -135,7 +135,7 @@ Configuration options are chosen based on the following precedence:
 
   1. **Defaults:** threshold: 0.33
   2. **Config file:** {"threshold": 0.5} → threshold: 0.5
-  3. **Environment variables:** ESXI_THRESHOLD=0.6 → threshold: 0.6
+  3. **Environment variables:** CERT_THRESHOLD=0.6 → threshold: 0.6
   4. **Command-line:** ```--threshold 0.7``` → threshold: 0.7 (final value)
 
 ## AWS Credentials and Authentication

@@ -88,11 +88,11 @@ The application requires AWS credentials for Route53 DNS validation and validate
 
 **Environment Variables**:
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`: AWS credentials
-- `ESXI_HOSTNAME`, `ESXI_DOMAIN`, `ESXI_EMAIL`: Core settings
+- `ESXI_HOSTNAME`, `AWS_ROUTE53_DOMAIN`, `EMAIL`: Core settings
 - `ESXI_USERNAME`, `ESXI_PASSWORD`: ESXi credentials
-- `ESXI_LOG_FILE`, `ESXI_LOG_LEVEL`: Logging configuration
-- `ESXI_THRESHOLD`, `ESXI_KEY_SIZE`: Certificate settings
-- `ESXI_DRY_RUN`, `ESXI_FORCE`: Operational modes
+- `LOG_FILE`, `LOG_LEVEL`: Logging configuration
+- `CERT_THRESHOLD`, `CERT_KEY_SIZE`: Certificate settings
+- `DRY_RUN`, `FORCE_RENEWAL`: Operational modes
 
 **JSON Configuration File**:
 - Supports all configuration options in JSON format
