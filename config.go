@@ -106,26 +106,32 @@ func (cm *ConfigManager) LoadDefaults() {
 	cm.Set("aws_region", "us-east-1", ConfigSourceDefault)
 	cm.Set("dry_run", false, ConfigSourceDefault)
 	cm.Set("force", false, ConfigSourceDefault)
+	cm.Set("check_updates", false, ConfigSourceDefault)
+	cm.Set("update_check_owner", "", ConfigSourceDefault)
+	cm.Set("update_check_repo", "", ConfigSourceDefault)
 }
 
 // LoadEnvironmentVariables loads configuration from environment variables
 func (cm *ConfigManager) LoadEnvironmentVariables() {
 	envMappings := map[string]string{
-		"hostname":              "ESXI_HOSTNAME",
-		"domain":               "AWS_ROUTE53_DOMAIN", 
-		"email":                "EMAIL",
-		"threshold":            "CERT_THRESHOLD",
-		"log_file":             "LOG_FILE",
-		"log_level":            "LOG_LEVEL",
-		"aws_key_id":           "AWS_ACCESS_KEY_ID",
-		"aws_secret_key":       "AWS_SECRET_ACCESS_KEY",
-		"aws_session_token":    "AWS_SESSION_TOKEN",
-		"aws_region":           "AWS_REGION",
-		"dry_run":              "DRY_RUN",
-		"force":                "FORCE_RENEWAL",
-		"key_size":             "CERT_KEY_SIZE",
-		"esxi_username":        "ESXI_USERNAME",
-		"esxi_password":        "ESXI_PASSWORD",
+		"hostname":           "ESXI_HOSTNAME",
+		"domain":             "AWS_ROUTE53_DOMAIN",
+		"email":              "EMAIL",
+		"threshold":          "CERT_THRESHOLD",
+		"log_file":           "LOG_FILE",
+		"log_level":          "LOG_LEVEL",
+		"aws_key_id":         "AWS_ACCESS_KEY_ID",
+		"aws_secret_key":     "AWS_SECRET_ACCESS_KEY",
+		"aws_session_token":  "AWS_SESSION_TOKEN",
+		"aws_region":         "AWS_REGION",
+		"dry_run":            "DRY_RUN",
+		"force":              "FORCE_RENEWAL",
+		"key_size":           "CERT_KEY_SIZE",
+		"esxi_username":      "ESXI_USERNAME",
+		"esxi_password":      "ESXI_PASSWORD",
+		"check_updates":      "CHECK_UPDATES",
+		"update_check_owner": "UPDATE_CHECK_OWNER",
+		"update_check_repo":  "UPDATE_CHECK_REPO",
 	}
 
 	for configKey, envVar := range envMappings {
@@ -140,7 +146,7 @@ func (cm *ConfigManager) LoadEnvironmentVariables() {
 				if i, err := strconv.Atoi(value); err == nil {
 					cm.Set(configKey, i, ConfigSourceEnvVar)
 				}
-			case "dry_run", "force":
+			case "dry_run", "force", "check_updates":
 				if b, err := strconv.ParseBool(value); err == nil {
 					cm.Set(configKey, b, ConfigSourceEnvVar)
 				}
@@ -154,20 +160,23 @@ func (cm *ConfigManager) LoadEnvironmentVariables() {
 // ConfigFile represents the structure of a configuration file
 type ConfigFile struct {
 	Hostname         string  `json:"hostname,omitempty"`
-	Domain          string  `json:"domain,omitempty"`
-	Email           string  `json:"email,omitempty"`
-	Threshold       float64 `json:"threshold,omitempty"`
-	LogFile         string  `json:"log_file,omitempty"`
-	LogLevel        string  `json:"log_level,omitempty"`
-	AWSKeyID        string  `json:"aws_key_id,omitempty"`
-	AWSSecretKey    string  `json:"aws_secret_key,omitempty"`
-	AWSSessionToken string  `json:"aws_session_token,omitempty"`
-	AWSRegion       string  `json:"aws_region,omitempty"`
-	DryRun          bool    `json:"dry_run,omitempty"`
-	Force           bool    `json:"force,omitempty"`
-	KeySize         int     `json:"key_size,omitempty"`
-	ESXiUsername    string  `json:"esxi_username,omitempty"`
-	ESXiPassword    string  `json:"esxi_password,omitempty"`
+	Domain           string  `json:"domain,omitempty"`
+	Email            string  `json:"email,omitempty"`
+	Threshold        float64 `json:"threshold,omitempty"`
+	LogFile          string  `json:"log_file,omitempty"`
+	LogLevel         string  `json:"log_level,omitempty"`
+	AWSKeyID         string  `json:"aws_key_id,omitempty"`
+	AWSSecretKey     string  `json:"aws_secret_key,omitempty"`
+	AWSSessionToken  string  `json:"aws_session_token,omitempty"`
+	AWSRegion        string  `json:"aws_region,omitempty"`
+	DryRun           bool    `json:"dry_run,omitempty"`
+	Force            bool    `json:"force,omitempty"`
+	KeySize          int     `json:"key_size,omitempty"`
+	ESXiUsername     string  `json:"esxi_username,omitempty"`
+	ESXiPassword     string  `json:"esxi_password,omitempty"`
+	CheckUpdates     bool    `json:"check_updates,omitempty"`
+	UpdateCheckOwner string  `json:"update_check_owner,omitempty"`
+	UpdateCheckRepo  string  `json:"update_check_repo,omitempty"`
 }
 
 // LoadConfigFile loads configuration from a JSON file
@@ -230,10 +239,17 @@ func (cm *ConfigManager) LoadConfigFile(filePath string) error {
 	if configFile.ESXiPassword != "" {
 		cm.Set("esxi_password", configFile.ESXiPassword, ConfigSourceConfigFile)
 	}
+	if configFile.UpdateCheckOwner != "" {
+		cm.Set("update_check_owner", configFile.UpdateCheckOwner, ConfigSourceConfigFile)
+	}
+	if configFile.UpdateCheckRepo != "" {
+		cm.Set("update_check_repo", configFile.UpdateCheckRepo, ConfigSourceConfigFile)
+	}
 
 	// Handle boolean values (they could be explicitly set to false)
 	cm.Set("dry_run", configFile.DryRun, ConfigSourceConfigFile)
 	cm.Set("force", configFile.Force, ConfigSourceConfigFile)
+	cm.Set("check_updates", configFile.CheckUpdates, ConfigSourceConfigFile)
 
 	logDebug("Loaded configuration from file: %s", filePath)
 	return nil
@@ -257,6 +273,9 @@ func (cm *ConfigManager) BuildConfig() Config {
 		KeySize:             cm.GetInt("key_size"),
 		ESXiUsername:        cm.GetString("esxi_username"),
 		ESXiPassword:        cm.GetString("esxi_password"),
+		CheckUpdates:        cm.GetBool("check_updates"),
+		UpdateCheckOwner:    cm.GetString("update_check_owner"),
+		UpdateCheckRepo:     cm.GetString("update_check_repo"),
 	}
 
 	// Set default log file if not specified

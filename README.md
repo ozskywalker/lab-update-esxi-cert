@@ -38,13 +38,13 @@ go build
 Basic usage to check a certificate without renewing (uses existing env variables from AWS):
 
 ```bash
-./lab-update-esxi-cert --hostname esxi.example.com --dry-run
+./lab-update-esxi-cert --hostname esxi.lab.example.com --dry-run
 ```
 
 Full renewal with permanent AWS credentials:
 
 ```bash
-./lab-update-esxi-cert --hostname esxi.example.com \
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
   --domain example.com \
   --email admin@example.com \
   --esxi-user root \
@@ -60,7 +60,7 @@ Full renewal with permanent AWS credentials:
 Using temporary AWS credentials (STS assume-role):
 
 ```bash
-./lab-update-esxi-cert --hostname esxi.example.com \
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
   --domain example.com \
   --email admin@example.com \
   --esxi-user root \
@@ -74,7 +74,7 @@ Using temporary AWS credentials (STS assume-role):
 Force certificate renewal regardless of expiration:
 
 ```bash
-./lab-update-esxi-cert --hostname esxi.example.com \
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
   --domain example.com \
   --email admin@example.com \
   --esxi-user root \
@@ -86,7 +86,7 @@ Force certificate renewal regardless of expiration:
 
 ## Configuration Options
 
-**Important**: The certificate is issued for the `--hostname` value (e.g., `esxlab01.longbranch.lwalker.me`), while `--domain` specifies the DNS zone managed by Route53 for validation (e.g., `longbranch.lwalker.me`). The hostname must be within the specified domain.
+**Important**: The certificate is issued for the `--hostname` value (e.g., CN = `esxi.lab.example.com`), while `--domain` specifies the DNS zone managed by Route53 for validation (e.g., `example.com`). The hostname must be within the specified domain.
 
 **Note**: Complex passwords with many special characters may cause SOAP API authentication failures. If you encounter authentication issues, try using a simpler password temporarily.
 

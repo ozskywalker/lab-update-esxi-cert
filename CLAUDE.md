@@ -15,6 +15,12 @@ go build
 # Build with specific output name
 go build -o lab-update-esxi-cert
 
+# Build with version information (Linux/macOS)
+./build.sh
+
+# Build with version information (Windows)
+.\build.ps1
+
 # Run tests (standard Go testing)
 go test ./...
 
@@ -97,6 +103,6 @@ The application requires AWS credentials for Route53 DNS validation and validate
 **JSON Configuration File**:
 - Supports all configuration options in JSON format
 - Specified via `-config` flag
-- Example: `{"hostname": "esxi.example.com", "domain": "example.com", "log_level": "INFO"}`
+- Example: `{"hostname": "esxi01.lab.example.com", "domain": "lab.example.com", "log_level": "INFO"}`
 
 **Credential Validation**: Uses AWS STS GetCallerIdentity to validate credentials before proceeding with certificate operations.

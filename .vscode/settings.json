@@ -1,0 +1,7 @@
+{
+    "makefile.configureOnOpen": false,
+    "files.eol": "\n",
+    "[go]": {
+        "files.eol": "\n"
+    }
+}

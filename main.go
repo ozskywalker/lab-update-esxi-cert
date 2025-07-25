@@ -12,6 +12,8 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+
+	"lab-update-esxi-cert/internal/version"
 )
 
 // Constants
@@ -59,6 +61,9 @@ type Config struct {
 	KeySize             int
 	ESXiUsername        string
 	ESXiPassword        string
+	CheckUpdates        bool
+	UpdateCheckOwner    string
+	UpdateCheckRepo     string
 }
 
 // Parse log level from string
@@ -163,6 +168,18 @@ func main() {
 
 	// Set up logging
 	setupLogging(config.LogFile, config.LogLevel)
+
+	// Log version information
+	v := version.Get()
+	logInfo("Starting %s", v.String())
+
+	// Check for updates if enabled and owner/repo are configured
+	if config.CheckUpdates && config.UpdateCheckOwner != "" && config.UpdateCheckRepo != "" {
+		logDebug("Checking for updates from %s/%s", config.UpdateCheckOwner, config.UpdateCheckRepo)
+		if version.QuietlyCheckForUpdates(config.UpdateCheckOwner, config.UpdateCheckRepo) {
+			logInfo("📦 A newer version is available! Run with --check-updates to see details.")
+		}
+	}
 
 	// Validate AWS credentials (required for both dry-run and normal execution)
 	err = validateAWSCredentials(config)

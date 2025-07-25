@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"lab-update-esxi-cert/internal/version"
 )
 
 // Parse command-line arguments and return a Config using structured configuration management
@@ -20,25 +22,57 @@ func parseArgs() (Config, error) {
 
 	// Define command-line flags
 	var (
-		hostname            = flag.String("hostname", "", "ESXi server hostname")
-		domain              = flag.String("domain", "", "DNS domain managed by Route53 (for DNS validation)")
-		email               = flag.String("email", "", "Email address for ACME registration")
-		threshold           = flag.Float64("threshold", 0, "Renewal threshold (e.g., 0.33 for 1/3 of remaining lifetime)")
-		logFile             = flag.String("log", "", "Path to log file (defaults to binary_name.log)")
-		logLevel            = flag.String("log-level", "", "Log level (ERROR, WARN, INFO, DEBUG)")
-		awsKeyID            = flag.String("aws-key-id", "", "AWS Access Key ID for Route53")
-		awsSecretKey        = flag.String("aws-secret-key", "", "AWS Secret Access Key for Route53")
-		awsSessionToken     = flag.String("aws-session-token", "", "AWS Session Token for Route53 (for temporary credentials)")
-		awsRegion           = flag.String("aws-region", "", "AWS Region for Route53")
-		dryRun              = flag.Bool("dry-run", false, "Only check certificate without renewing")
-		force               = flag.Bool("force", false, "Force certificate renewal regardless of expiration threshold")
-		keySize             = flag.Int("key-size", 0, "RSA key size for certificates (2048, 4096)")
-		esxiUsername        = flag.String("esxi-user", "", "ESXi server username")
-		esxiPassword        = flag.String("esxi-pass", "", "ESXi server password")
+		showVersion      = flag.Bool("version", false, "Show version information and exit")
+		checkUpdates     = flag.Bool("check-updates", false, "Check for available updates from GitHub releases")
+		hostname         = flag.String("hostname", "", "ESXi server hostname")
+		domain           = flag.String("domain", "", "DNS domain managed by Route53 (for DNS validation)")
+		email            = flag.String("email", "", "Email address for ACME registration")
+		threshold        = flag.Float64("threshold", 0, "Renewal threshold (e.g., 0.33 for 1/3 of remaining lifetime)")
+		logFile          = flag.String("log", "", "Path to log file (defaults to binary_name.log)")
+		logLevel         = flag.String("log-level", "", "Log level (ERROR, WARN, INFO, DEBUG)")
+		awsKeyID         = flag.String("aws-key-id", "", "AWS Access Key ID for Route53")
+		awsSecretKey     = flag.String("aws-secret-key", "", "AWS Secret Access Key for Route53")
+		awsSessionToken  = flag.String("aws-session-token", "", "AWS Session Token for Route53 (for temporary credentials)")
+		awsRegion        = flag.String("aws-region", "", "AWS Region for Route53")
+		dryRun           = flag.Bool("dry-run", false, "Only check certificate without renewing")
+		force            = flag.Bool("force", false, "Force certificate renewal regardless of expiration threshold")
+		keySize          = flag.Int("key-size", 0, "RSA key size for certificates (2048, 4096)")
+		esxiUsername     = flag.String("esxi-user", "", "ESXi server username")
+		esxiPassword     = flag.String("esxi-pass", "", "ESXi server password")
+		updateCheckOwner = flag.String("update-check-owner", "", "GitHub owner/organization for update checks")
+		updateCheckRepo  = flag.String("update-check-repo", "", "GitHub repository name for update checks")
 	)
 
 	// Parse flags first to get config file path
 	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		v := version.Get()
+		fmt.Println(v.Detailed())
+		os.Exit(0)
+	}
+
+	// Handle update check flag
+	if *checkUpdates {
+		owner := *updateCheckOwner
+		repo := *updateCheckRepo
+		if owner == "" || repo == "" {
+			fmt.Println("Error: --update-check-owner and --update-check-repo must be specified for update checks")
+			fmt.Println("Example: --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert")
+			os.Exit(1)
+		}
+
+		fmt.Printf("Checking for updates from %s/%s...\n", owner, repo)
+		updateInfo, err := version.CheckForUpdates(owner, repo)
+		if err != nil {
+			fmt.Printf("Failed to check for updates: %v\n", err)
+			os.Exit(1)
+		}
+
+		updateInfo.PrintUpdateNotification()
+		os.Exit(0)
+	}
 
 	// Print help if no arguments provided
 	if len(os.Args) <= 1 {
@@ -100,6 +134,15 @@ func parseArgs() (Config, error) {
 	if *esxiPassword != "" {
 		cm.Set("esxi_password", *esxiPassword, ConfigSourceFlag)
 	}
+	if *checkUpdates {
+		cm.Set("check_updates", *checkUpdates, ConfigSourceFlag)
+	}
+	if *updateCheckOwner != "" {
+		cm.Set("update_check_owner", *updateCheckOwner, ConfigSourceFlag)
+	}
+	if *updateCheckRepo != "" {
+		cm.Set("update_check_repo", *updateCheckRepo, ConfigSourceFlag)
+	}
 
 	// Build final configuration
 	config := cm.BuildConfig()
@@ -119,7 +162,8 @@ func parseArgs() (Config, error) {
 
 // Print help and usage examples
 func printHelp() {
-	fmt.Println("ESXi Certificate Manager")
+	v := version.Get()
+	fmt.Printf("ESXi Certificate Manager %s\n", v.String())
 	fmt.Println("=======================")
 	fmt.Println("This tool checks and automatically renews SSL certificates for ESXi servers.")
 	fmt.Println("")
@@ -130,27 +174,33 @@ func printHelp() {
 	flag.PrintDefaults()
 	fmt.Println("")
 	fmt.Println("Examples:")
+	fmt.Printf("  # Show version information\n")
+	fmt.Printf("  %s --version\n", os.Args[0])
+	fmt.Println("")
+	fmt.Printf("  # Check for updates\n")
+	fmt.Printf("  %s --check-updates --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert\n", os.Args[0])
+	fmt.Println("")
 	fmt.Printf("  # Check certificate only\n")
-	fmt.Printf("  %s --hostname esxi.example.com --dry-run\n", os.Args[0])
+	fmt.Printf("  %s --hostname esxi01.lab.example.com --dry-run\n", os.Args[0])
 	fmt.Println("")
 	fmt.Printf("  # Using a configuration file\n")
 	fmt.Printf("  %s --config /path/to/config.json\n", os.Args[0])
 	fmt.Println("")
 	fmt.Printf("  # Check and renew certificate if needed\n")
-	fmt.Printf("  %s --hostname esxi.example.com --domain example.com --email admin@example.com \\\n", os.Args[0])
+	fmt.Printf("  %s --hostname esxi01.lab.example.com --domain lab.example.com --email admin@example.com \\\n", os.Args[0])
 	fmt.Printf("    --esxi-user root --esxi-pass password --aws-key-id AKIAXXXXXXXX --aws-secret-key xxxxxxxx\n")
 	fmt.Println("")
 	fmt.Printf("  # With temporary credentials (session token)\n")
-	fmt.Printf("  %s --hostname esxi.example.com --domain example.com --email admin@example.com \\\n", os.Args[0])
+	fmt.Printf("  %s --hostname esxi01.lab.example.com --domain lab.example.com --email admin@example.com \\\n", os.Args[0])
 	fmt.Printf("    --esxi-user root --esxi-pass password --aws-key-id ASIAXXXXXXXX --aws-secret-key xxxxxxxx \\\n")
 	fmt.Printf("    --aws-session-token xxxxxxxx\n")
 	fmt.Println("")
 	fmt.Printf("  # With custom threshold, log file, and debug logging\n")
-	fmt.Printf("  %s --hostname esxi.example.com --domain example.com --email admin@example.com \\\n", os.Args[0])
+	fmt.Printf("  %s --hostname esxi01.lab.example.com --domain lab.example.com --email admin@example.com \\\n", os.Args[0])
 	fmt.Printf("    --esxi-user root --esxi-pass password --threshold 0.5 --log /var/log/esxi-cert.log --log-level DEBUG\n")
 	fmt.Println("")
 	fmt.Printf("  # Force certificate renewal regardless of expiration\n")
-	fmt.Printf("  %s --hostname esxi.example.com --domain example.com --email admin@example.com \\\n", os.Args[0])
+	fmt.Printf("  %s --hostname esxi01.lab.example.com --domain lab.example.com --email admin@example.com \\\n", os.Args[0])
 	fmt.Printf("    --esxi-user root --esxi-pass password --force\n")
 	fmt.Println("")
 	fmt.Printf("Configuration File:\n")
@@ -160,12 +210,15 @@ func printHelp() {
 	fmt.Println("")
 	fmt.Printf("  Example config.json:\n")
 	fmt.Printf("  {\n")
-	fmt.Printf("    \"hostname\": \"esxi.example.com\",\n")
-	fmt.Printf("    \"domain\": \"example.com\",\n")
+	fmt.Printf("    \"hostname\": \"esxi01.lab.example.com\",\n")
+	fmt.Printf("    \"domain\": \"lab.example.com\",\n")
 	fmt.Printf("    \"email\": \"admin@example.com\",\n")
 	fmt.Printf("    \"log_level\": \"INFO\",\n")
 	fmt.Printf("    \"threshold\": 0.33,\n")
-	fmt.Printf("    \"key_size\": 4096\n")
+	fmt.Printf("    \"key_size\": 4096,\n")
+	fmt.Printf("    \"check_updates\": true,\n")
+	fmt.Printf("    \"update_check_owner\": \"yourusername\",\n")
+	fmt.Printf("    \"update_check_repo\": \"lab-update-esxi-cert\"\n")
 	fmt.Printf("  }\n")
 	fmt.Println("")
 	fmt.Printf("Notes: \n1. Certificates are installed by copying files to /etc/vmware/ssl/ via SSH.\n")
