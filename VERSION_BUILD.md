@@ -111,42 +111,24 @@ Platform:   linux/amd64
 
 ## Update Checking
 
-The application can check for newer versions on GitHub releases:
+The application automatically checks for newer versions on GitHub releases during normal operation:
 
-### Configuration Options
+### Automatic Update Notifications
 
-**Command Line:**
-```bash
-# Check for updates immediately
-./lab-update-esxi-cert --check-updates --update-check-owner=username --update-check-repo=lab-update-esxi-cert
-
-# Enable automatic update checks during normal operation
-./lab-update-esxi-cert --check-updates=true --update-check-owner=username --update-check-repo=lab-update-esxi-cert [other options]
-```
-
-**Configuration File:**
-```json
-{
-  "check_updates": true,
-  "update_check_owner": "username",
-  "update_check_repo": "lab-update-esxi-cert"
-}
-```
-
-**Environment Variables:**
-```bash
-export CHECK_UPDATES=true
-export UPDATE_CHECK_OWNER=username
-export UPDATE_CHECK_REPO=lab-update-esxi-cert
-```
+- **During help display**: Shows update notification when running without arguments
+- **During version check**: Shows update notification when using `--version` flag
+- **During normal execution**: Shows update notification when performing certificate operations
+- **Silent on failures**: Network issues or API problems don't interrupt normal operation
 
 ### How Update Checking Works
 
-1. Compares current version with latest GitHub release using semantic versioning
-2. Uses GitHub API (no authentication required for public repos)
-3. Includes built-in rate limiting and timeout protection
-4. Shows non-intrusive notifications when updates are available
-5. Never automatically downloads or installs updates
+1. Automatically checks `ozskywalker/lab-update-esxi-cert` repository on GitHub
+2. Compares current version with latest GitHub release using semantic versioning
+3. Uses GitHub API (no authentication required for public repos)
+4. Includes built-in rate limiting and timeout protection (10 second timeout)
+5. Shows non-intrusive notifications when updates are available
+6. Never automatically downloads or installs updates
+7. No configuration required - works out of the box
 
 ## Release Process
 

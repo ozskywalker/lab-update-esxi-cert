@@ -8,6 +8,12 @@ import (
 	"github.com/tcnksm/go-latest"
 )
 
+// Constants for hardcoded repository information
+const (
+	GitHubOwner = "ozskywalker"
+	GitHubRepo  = "lab-update-esxi-cert"
+)
+
 // UpdateInfo contains information about available updates
 type UpdateInfo struct {
 	CurrentVersion string
@@ -17,15 +23,12 @@ type UpdateInfo struct {
 }
 
 // CheckForUpdates checks if there's a newer version available on GitHub
-func CheckForUpdates(owner, repo string) (*UpdateInfo, error) {
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("owner and repo must be specified for update checks")
-	}
-
-	// Create GitHub tag checker
+// Uses hardcoded repository information
+func CheckForUpdates() (*UpdateInfo, error) {
+	// Create GitHub tag checker with hardcoded repo info
 	githubTag := &latest.GithubTag{
-		Owner:      owner,
-		Repository: repo,
+		Owner:      GitHubOwner,
+		Repository: GitHubRepo,
 	}
 
 	// Get current version info
@@ -60,10 +63,27 @@ func CheckForUpdates(owner, repo string) (*UpdateInfo, error) {
 		CurrentVersion: currentVer,
 		LatestVersion:  res.Current,
 		UpdateURL:      res.Meta.URL,
-		IsUpToDate:     res.Outdated == false,
+		IsUpToDate:     !res.Outdated,
 	}
 
 	return updateInfo, nil
+}
+
+// GetUpdateNotification returns a single-line update notification string
+// Returns empty string if up-to-date or check fails
+func GetUpdateNotification() string {
+	updateInfo, err := CheckForUpdates()
+	if err != nil {
+		// Silently fail - don't interrupt normal operation
+		return ""
+	}
+
+	if updateInfo.IsUpToDate {
+		return ""
+	}
+
+	return fmt.Sprintf("📦 Update available: %s → %s - Download: %s",
+		updateInfo.CurrentVersion, updateInfo.LatestVersion, updateInfo.UpdateURL)
 }
 
 // PrintUpdateNotification prints a user-friendly update notification
@@ -75,13 +95,12 @@ func (u *UpdateInfo) PrintUpdateNotification() {
 
 	fmt.Printf("📦 Update available: %s → %s\n", u.CurrentVersion, u.LatestVersion)
 	fmt.Printf("   Download: %s\n", u.UpdateURL)
-	fmt.Println("   Run with --version to see current version details")
 }
 
 // QuietlyCheckForUpdates performs an update check without user interaction
 // Returns true if an update is available, false otherwise
-func QuietlyCheckForUpdates(owner, repo string) bool {
-	updateInfo, err := CheckForUpdates(owner, repo)
+func QuietlyCheckForUpdates() bool {
+	updateInfo, err := CheckForUpdates()
 	if err != nil {
 		// Log the error but don't interrupt the user
 		log.Printf("[DEBUG] Update check failed: %v", err)

@@ -22,25 +22,22 @@ func parseArgs() (Config, error) {
 
 	// Define command-line flags
 	var (
-		showVersion      = flag.Bool("version", false, "Show version information and exit")
-		checkUpdates     = flag.Bool("check-updates", false, "Check for available updates from GitHub releases")
-		hostname         = flag.String("hostname", "", "ESXi server hostname")
-		domain           = flag.String("domain", "", "DNS domain managed by Route53 (for DNS validation)")
-		email            = flag.String("email", "", "Email address for ACME registration")
-		threshold        = flag.Float64("threshold", 0, "Renewal threshold (e.g., 0.33 for 1/3 of remaining lifetime)")
-		logFile          = flag.String("log", "", "Path to log file (defaults to binary_name.log)")
-		logLevel         = flag.String("log-level", "", "Log level (ERROR, WARN, INFO, DEBUG)")
-		awsKeyID         = flag.String("aws-key-id", "", "AWS Access Key ID for Route53")
-		awsSecretKey     = flag.String("aws-secret-key", "", "AWS Secret Access Key for Route53")
-		awsSessionToken  = flag.String("aws-session-token", "", "AWS Session Token for Route53 (for temporary credentials)")
-		awsRegion        = flag.String("aws-region", "", "AWS Region for Route53")
-		dryRun           = flag.Bool("dry-run", false, "Only check certificate without renewing")
-		force            = flag.Bool("force", false, "Force certificate renewal regardless of expiration threshold")
-		keySize          = flag.Int("key-size", 0, "RSA key size for certificates (2048, 4096)")
-		esxiUsername     = flag.String("esxi-user", "", "ESXi server username")
-		esxiPassword     = flag.String("esxi-pass", "", "ESXi server password")
-		updateCheckOwner = flag.String("update-check-owner", "", "GitHub owner/organization for update checks")
-		updateCheckRepo  = flag.String("update-check-repo", "", "GitHub repository name for update checks")
+		showVersion     = flag.Bool("version", false, "Show version information and exit")
+		hostname        = flag.String("hostname", "", "ESXi server hostname")
+		domain          = flag.String("domain", "", "DNS domain managed by Route53 (for DNS validation)")
+		email           = flag.String("email", "", "Email address for ACME registration")
+		threshold       = flag.Float64("threshold", 0, "Renewal threshold (e.g., 0.33 for 1/3 of remaining lifetime)")
+		logFile         = flag.String("log", "", "Path to log file (defaults to binary_name.log)")
+		logLevel        = flag.String("log-level", "", "Log level (ERROR, WARN, INFO, DEBUG)")
+		awsKeyID        = flag.String("aws-key-id", "", "AWS Access Key ID for Route53")
+		awsSecretKey    = flag.String("aws-secret-key", "", "AWS Secret Access Key for Route53")
+		awsSessionToken = flag.String("aws-session-token", "", "AWS Session Token for Route53 (for temporary credentials)")
+		awsRegion       = flag.String("aws-region", "", "AWS Region for Route53")
+		dryRun          = flag.Bool("dry-run", false, "Only check certificate without renewing")
+		force           = flag.Bool("force", false, "Force certificate renewal regardless of expiration threshold")
+		keySize         = flag.Int("key-size", 0, "RSA key size for certificates (2048, 4096)")
+		esxiUsername    = flag.String("esxi-user", "", "ESXi server username")
+		esxiPassword    = flag.String("esxi-pass", "", "ESXi server password")
 	)
 
 	// Parse flags first to get config file path
@@ -50,27 +47,13 @@ func parseArgs() (Config, error) {
 	if *showVersion {
 		v := version.Get()
 		fmt.Println(v.Detailed())
-		os.Exit(0)
-	}
 
-	// Handle update check flag
-	if *checkUpdates {
-		owner := *updateCheckOwner
-		repo := *updateCheckRepo
-		if owner == "" || repo == "" {
-			fmt.Println("Error: --update-check-owner and --update-check-repo must be specified for update checks")
-			fmt.Println("Example: --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert")
-			os.Exit(1)
+		// Check for updates and display if available
+		if updateMsg := version.GetUpdateNotification(); updateMsg != "" {
+			fmt.Println()
+			fmt.Println(updateMsg)
 		}
 
-		fmt.Printf("Checking for updates from %s/%s...\n", owner, repo)
-		updateInfo, err := version.CheckForUpdates(owner, repo)
-		if err != nil {
-			fmt.Printf("Failed to check for updates: %v\n", err)
-			os.Exit(1)
-		}
-
-		updateInfo.PrintUpdateNotification()
 		os.Exit(0)
 	}
 
@@ -134,15 +117,6 @@ func parseArgs() (Config, error) {
 	if *esxiPassword != "" {
 		cm.Set("esxi_password", *esxiPassword, ConfigSourceFlag)
 	}
-	if *checkUpdates {
-		cm.Set("check_updates", *checkUpdates, ConfigSourceFlag)
-	}
-	if *updateCheckOwner != "" {
-		cm.Set("update_check_owner", *updateCheckOwner, ConfigSourceFlag)
-	}
-	if *updateCheckRepo != "" {
-		cm.Set("update_check_repo", *updateCheckRepo, ConfigSourceFlag)
-	}
 
 	// Build final configuration
 	config := cm.BuildConfig()
@@ -167,6 +141,12 @@ func printHelp() {
 	fmt.Println("=======================")
 	fmt.Println("This tool checks and automatically renews SSL certificates for ESXi servers.")
 	fmt.Println("")
+
+	// Check for updates and display if available
+	if updateMsg := version.GetUpdateNotification(); updateMsg != "" {
+		fmt.Println(updateMsg)
+		fmt.Println("")
+	}
 	fmt.Println("Usage:")
 	fmt.Printf("  %s [options]\n", os.Args[0])
 	fmt.Println("")
@@ -176,9 +156,6 @@ func printHelp() {
 	fmt.Println("Examples:")
 	fmt.Printf("  # Show version information\n")
 	fmt.Printf("  %s --version\n", os.Args[0])
-	fmt.Println("")
-	fmt.Printf("  # Check for updates\n")
-	fmt.Printf("  %s --check-updates --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert\n", os.Args[0])
 	fmt.Println("")
 	fmt.Printf("  # Check certificate only\n")
 	fmt.Printf("  %s --hostname esxi01.lab.example.com --dry-run\n", os.Args[0])

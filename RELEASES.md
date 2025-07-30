@@ -132,11 +132,6 @@ To enable GPG signing of releases:
 
 Once releases are published:
 
-1. **Users can check for updates**:
-   ```bash
-   ./lab-update-esxi-cert --check-updates --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert
-   ```
-
-2. **Configure automatic update checking** in config files or environment variables
-
-3. **The built-in version system** will automatically detect new releases using GitHub's API
+1. **Automatic update notifications**: Users will see update notifications during normal usage of the application
+2. **No configuration needed**: The application automatically checks the correct GitHub repository
+3. **Built-in version system**: Automatically detects new releases using GitHub's API without any user setup

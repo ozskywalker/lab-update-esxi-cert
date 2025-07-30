@@ -5,6 +5,7 @@ before:
     - go mod tidy
     - go fmt ./...
     - go vet ./...
+    - go test ./...
 
 builds:
   - env:
@@ -21,10 +22,10 @@ builds:
     #     goarch: arm64
     ldflags:
       - -s -w
-      - -X 'lab-update-esxi-cert/internal/version.Version={{.Version}}'
-      - -X 'lab-update-esxi-cert/internal/version.GitCommit={{.FullCommit}}'
-      - -X 'lab-update-esxi-cert/internal/version.BuildDate={{.Date}}'
-      - -X 'lab-update-esxi-cert/internal/version.GitTag={{.Tag}}'
+      - -X '{{ .ModulePath }}/internal/version.Version={{.Version}}'
+      - -X '{{ .ModulePath }}/internal/version.GitCommit={{.FullCommit}}'
+      - -X '{{ .ModulePath }}/internal/version.BuildDate={{.Date}}'
+      - -X '{{ .ModulePath }}/internal/version.GitTag={{.Tag}}'
     binary: lab-update-esxi-cert
 
 archives:

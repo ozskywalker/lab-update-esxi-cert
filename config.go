@@ -273,9 +273,6 @@ func (cm *ConfigManager) BuildConfig() Config {
 		KeySize:             cm.GetInt("key_size"),
 		ESXiUsername:        cm.GetString("esxi_username"),
 		ESXiPassword:        cm.GetString("esxi_password"),
-		CheckUpdates:        cm.GetBool("check_updates"),
-		UpdateCheckOwner:    cm.GetString("update_check_owner"),
-		UpdateCheckRepo:     cm.GetString("update_check_repo"),
 	}
 
 	// Set default log file if not specified

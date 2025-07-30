@@ -61,9 +61,6 @@ type Config struct {
 	KeySize             int
 	ESXiUsername        string
 	ESXiPassword        string
-	CheckUpdates        bool
-	UpdateCheckOwner    string
-	UpdateCheckRepo     string
 }
 
 // Parse log level from string
@@ -173,12 +170,10 @@ func main() {
 	v := version.Get()
 	logInfo("Starting %s", v.String())
 
-	// Check for updates if enabled and owner/repo are configured
-	if config.CheckUpdates && config.UpdateCheckOwner != "" && config.UpdateCheckRepo != "" {
-		logDebug("Checking for updates from %s/%s", config.UpdateCheckOwner, config.UpdateCheckRepo)
-		if version.QuietlyCheckForUpdates(config.UpdateCheckOwner, config.UpdateCheckRepo) {
-			logInfo("📦 A newer version is available! Run with --check-updates to see details.")
-		}
+	// Check for updates and display notification
+	if updateMsg := version.GetUpdateNotification(); updateMsg != "" {
+		logInfo(updateMsg)
+		fmt.Println(updateMsg)
 	}
 
 	// Validate AWS credentials (required for both dry-run and normal execution)
@@ -199,7 +194,7 @@ func main() {
 	needsRenewal, certInfo := checkCertificate(config.Hostname, config.Threshold)
 	if config.Force {
 		logInfo("Force renewal enabled - bypassing expiration threshold check")
-		needsRenewal = true
+		needsRenewal = true //nolint:ineffassign // Intentional override for force renewal
 	} else if !needsRenewal {
 		logInfo("Certificate for %s is still valid (expires on %s) and doesn't need renewal yet.",
 			config.Hostname, certInfo.NotAfter.Format(time.RFC3339))

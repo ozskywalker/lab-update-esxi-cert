@@ -6,6 +6,13 @@ A Golang utility for automating SSL certificate renewals for VMware ESXi hosts i
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 ![Claude Used](https://img.shields.io/badge/Claude-Used-4B5AEA)
 
+## CI/CD Status
+
+[![Test](https://github.com/ozskywalker/lab-update-esxi-cert/actions/workflows/test.yml/badge.svg)](https://github.com/ozskywalker/lab-update-esxi-cert/actions/workflows/test.yml)
+[![Release](https://github.com/ozskywalker/lab-update-esxi-cert/actions/workflows/release.yml/badge.svg)](https://github.com/ozskywalker/lab-update-esxi-cert/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/ozskywalker/lab-update-esxi-cert/branch/main/graph/badge.svg)](https://codecov.io/gh/ozskywalker/lab-update-esxi-cert)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ozskywalker/lab-update-esxi-cert)](https://goreportcard.com/report/github.com/ozskywalker/lab-update-esxi-cert)
+
 ## Overview
 
 This utility addresses a specific need: automatically managing SSL certificates for standalone VMware ESXi 6.7 hosts (without vCenter) in lab environments. It uses Let's Encrypt for free certificate issuance and AWS Route53 for DNS validation.
