@@ -26,29 +26,35 @@ Key features:
 - VMware ESXi 6.7 host(s)
 - Domain name configured in AWS Route53
 
+## Limitations
+
+- Currently only supports AWS Route53 for DNS challenges
+- Designed for standalone ESXi hosts, not vCenter-managed environments
+- Limited error recovery capabilities in this early version
+
 ## Installation
 
 ### From GitHub Releases (Recommended)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/yourusername/lab-update-esxi-cert/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/ozskywalker/lab-update-esxi-cert/releases):
 
 ```bash
 # Linux/macOS
-curl -L https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/ozskywalker/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Linux-x86_64.tar.gz | tar xz
 
 # Windows (PowerShell) - Intel/AMD64
-Invoke-WebRequest -Uri "https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-x86_64.zip" -OutFile "lab-update-esxi-cert.zip"
+Invoke-WebRequest -Uri "https://github.com/ozskywalker/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-x86_64.zip" -OutFile "lab-update-esxi-cert.zip"
 Expand-Archive lab-update-esxi-cert.zip
 
 # Windows (PowerShell) - ARM64  
-Invoke-WebRequest -Uri "https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-arm64.zip" -OutFile "lab-update-esxi-cert.zip"
+Invoke-WebRequest -Uri "https://github.com/ozskywalker/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-arm64.zip" -OutFile "lab-update-esxi-cert.zip"
 Expand-Archive lab-update-esxi-cert.zip
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/lab-update-esxi-cert.git
+git clone https://github.com/ozskywalker/lab-update-esxi-cert.git
 cd lab-update-esxi-cert
 go build
 ```
@@ -193,15 +199,11 @@ The tool validates AWS credentials at startup using AWS STS GetCallerIdentity be
 9. **SSH Cleanup**: Stops TSM-SSH service via SOAP API
 10. **Validation**: Verifies the new certificate is properly installed
 
-## Limitations
-
-- Currently only supports AWS Route53 for DNS challenges
-- Designed for standalone ESXi hosts, not vCenter-managed environments
-- Limited error recovery capabilities in this early version
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated changelog generation. Please follow the commit message format outlined in [CONTRIBUTING.md](CONTRIBUTING.md) to ensure your changes appear in the release notes.
 
 ## License
 

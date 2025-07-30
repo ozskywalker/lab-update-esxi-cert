@@ -120,7 +120,7 @@ release:
     ---
     
     **🔧 Build Info**:
-    - Go Version: {{ .Runtime.Goversion }}
+    - Go Version: {{ .Env.GOVERSION }}
     - Built: {{ .Date }}
     - Commit: {{ .ShortCommit }}
 
