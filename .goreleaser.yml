@@ -141,8 +141,4 @@ signs:
     artifacts: checksum
     output: true
 
-# Create SBOM (Software Bill of Materials) for security compliance
-sboms:
-  - artifacts: archive
-  - id: source
-    artifacts: source
+# SBOM generation moved to GitHub Actions workflow using anchore/sbom-action
