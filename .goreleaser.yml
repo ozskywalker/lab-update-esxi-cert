@@ -128,8 +128,6 @@ release:
 # All files (including the sboms) are included in the checksum file
 signs:
   - cmd: gpg
-    env:
-      - GPG_TTY={{ .Env.GPG_TTY }}
     args:
       - "--batch"
       - "--local-user"
