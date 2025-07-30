@@ -20,12 +20,32 @@ Key features:
 
 ## Prerequisites
 
-- Go 1.24.4+
+- binaries: Windows (x86-64 or ARM64), Linux (x86-64/ARM64), or macOS (Apple Silicon or Intel)
+- building from source: go 1.24.4
 - AWS Account with Route53 access
 - VMware ESXi 6.7 host(s)
 - Domain name configured in AWS Route53
 
 ## Installation
+
+### From GitHub Releases (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/yourusername/lab-update-esxi-cert/releases):
+
+```bash
+# Linux/macOS
+curl -L https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Linux-x86_64.tar.gz | tar xz
+
+# Windows (PowerShell) - Intel/AMD64
+Invoke-WebRequest -Uri "https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-x86_64.zip" -OutFile "lab-update-esxi-cert.zip"
+Expand-Archive lab-update-esxi-cert.zip
+
+# Windows (PowerShell) - ARM64  
+Invoke-WebRequest -Uri "https://github.com/yourusername/lab-update-esxi-cert/releases/latest/download/lab-update-esxi-cert-Windows-arm64.zip" -OutFile "lab-update-esxi-cert.zip"
+Expand-Archive lab-update-esxi-cert.zip
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/yourusername/lab-update-esxi-cert.git

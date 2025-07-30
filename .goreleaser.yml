@@ -1,0 +1,148 @@
+version: 1
+
+before:
+  hooks:
+    - go mod tidy
+    - go fmt ./...
+    - go vet ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # ignore:
+    #   - goos: windows
+    #     goarch: arm64
+    ldflags:
+      - -s -w
+      - -X 'lab-update-esxi-cert/internal/version.Version={{.Version}}'
+      - -X 'lab-update-esxi-cert/internal/version.GitCommit={{.FullCommit}}'
+      - -X 'lab-update-esxi-cert/internal/version.BuildDate={{.Date}}'
+      - -X 'lab-update-esxi-cert/internal/version.GitTag={{.Tag}}'
+    binary: lab-update-esxi-cert
+
+archives:
+  - format: tar.gz
+    # Use zip for Windows archives
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- title .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - VERSION_BUILD.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^build:'
+      - '^ci:'
+      - '^refactor:'
+      - '^style:'
+      - merge conflict
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Security
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## ESXi Certificate Manager {{ .Tag }}
+    
+    🚀 **Release Highlights**
+    
+    This release includes cross-platform binaries for Windows, Linux, and macOS.
+    
+    ### 📦 **Installation**
+    
+    Download the appropriate binary for your platform from the assets below.
+    
+    ### ✅ **Verification**
+    
+    All binaries are signed and checksummed. Verify your download with:
+    ```bash
+    # Check version
+    ./lab-update-esxi-cert --version
+    
+    # Verify checksum (example for Linux)
+    sha256sum -c checksums.txt --ignore-missing
+    ```
+    
+    ### 🔄 **Update Checking**
+    
+    This version includes built-in update checking. Configure your GitHub repository details to receive update notifications:
+    ```bash
+    # Check for updates
+    ./lab-update-esxi-cert --check-updates --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert
+    ```
+    
+  footer: |
+    ---
+    
+    **🔧 Build Info**:
+    - Go Version: {{ .Runtime.Goversion }}
+    - Built: {{ .Date }}
+    - Commit: {{ .ShortCommit }}
+
+# Signs the checksum file
+# All files (including the sboms) are included in the checksum file
+signs:
+  - cmd: gpg
+    env:
+      - GPG_TTY={{ .Env.GPG_TTY }}
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+
+# Create SBOM (Software Bill of Materials) for security compliance
+sboms:
+  - artifacts: archive
+  - id: source
+    artifacts: source

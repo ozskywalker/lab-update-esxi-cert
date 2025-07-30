@@ -150,7 +150,9 @@ export UPDATE_CHECK_REPO=lab-update-esxi-cert
 
 ## Release Process
 
-When creating releases:
+### Automated Releases via GitHub Actions
+
+The project uses GitHub Actions with GoReleaser for fully automated releases:
 
 1. **Tag the release** using semantic versioning:
    ```bash
@@ -158,15 +160,49 @@ When creating releases:
    git push origin v1.0.0
    ```
 
-2. **Build release binaries** with proper version injection:
-   ```bash
-   # The build scripts will automatically use the tag
-   ./build.sh
-   ```
+2. **GitHub Actions automatically**:
+   - Builds binaries for multiple platforms (Windows, Linux, macOS)
+   - Injects proper version information using ldflags
+   - Creates GitHub release with cross-platform assets
+   - Generates checksums and signatures
+   - Creates changelog from commit messages
 
-3. **Create GitHub release** with the built binaries
+3. **Release assets include**:
+   - `lab-update-esxi-cert-Windows-x86_64.zip`
+   - `lab-update-esxi-cert-Windows-arm64.zip`
+   - `lab-update-esxi-cert-Linux-x86_64.tar.gz`
+   - `lab-update-esxi-cert-Linux-arm64.tar.gz`
+   - `lab-update-esxi-cert-Darwin-x86_64.tar.gz`
+   - `lab-update-esxi-cert-Darwin-arm64.tar.gz`
+   - `checksums.txt`
 
-4. **Update checking** will automatically detect the new release
+4. **Update checking** automatically detects the new release
+
+### Manual Development Builds
+
+For local development and testing:
+
+**Linux/macOS:**
+```bash
+./build.sh
+```
+
+**Windows:**
+```powershell
+.\build.ps1
+```
+
+**GoReleaser (cross-platform):**
+```bash
+# Install GoReleaser
+go install github.com/goreleaser/goreleaser@latest
+
+# Build for current platform only
+goreleaser build --single-target --snapshot --clean
+
+# Build for all platforms (requires tag)
+goreleaser release --snapshot --clean
+```
 
 ## Development Builds
 
