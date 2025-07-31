@@ -12,12 +12,12 @@ import (
 
 // E2ETestSuite represents a complete end-to-end test environment
 type E2ETestSuite struct {
-	MockACMEServer  *httptest.Server
-	MockAWSServer   *httptest.Server
-	MockESXiServer  *MockSSHServer
-	MockTLSServer   *testutil.MockTLSServer
-	TempDir         string
-	Config          map[string]interface{}
+	MockACMEServer *httptest.Server
+	MockAWSServer  *httptest.Server
+	MockESXiServer *MockSSHServer
+	MockTLSServer  *testutil.MockTLSServer
+	TempDir        string
+	Config         map[string]interface{}
 }
 
 // NewE2ETestSuite creates a new end-to-end test suite with all mock services
@@ -28,10 +28,10 @@ func NewE2ETestSuite(t *testing.T) *E2ETestSuite {
 
 	// Set up mock ACME server
 	suite.setupMockACMEServer()
-	
+
 	// Set up mock AWS services
 	suite.setupMockAWSServer()
-	
+
 	// Set up mock ESXi SSH server
 	var err error
 	suite.MockESXiServer, err = NewMockSSHServer()
@@ -76,7 +76,7 @@ func (suite *E2ETestSuite) setupMockACMEServer() {
 	mux.HandleFunc("/directory", func(w http.ResponseWriter, r *http.Request) {
 		_ = map[string]interface{}{
 			"newAccount": suite.MockACMEServer.URL + "/acme/new-account",
-			"newOrder":   suite.MockACMEServer.URL + "/acme/new-order", 
+			"newOrder":   suite.MockACMEServer.URL + "/acme/new-order",
 			"newNonce":   suite.MockACMEServer.URL + "/acme/new-nonce",
 			"keyChange":  suite.MockACMEServer.URL + "/acme/key-change",
 			"meta": map[string]interface{}{
@@ -198,12 +198,12 @@ func TestE2E_DryRunWorkflow(t *testing.T) {
 
 	// Simulate AWS credential validation (would be mocked)
 	t.Log("AWS credential validation would be called here")
-	
+
 	// Simulate certificate checking
 	t.Log("Certificate expiration check would be performed here")
-	
+
 	// In dry-run mode, no certificate generation or upload should occur
-	
+
 	// Verify no commands were executed on ESXi server
 	commands := suite.MockESXiServer.GetExecutedCommands()
 	if len(commands) > 0 {
@@ -240,7 +240,7 @@ func TestE2E_FullRenewalWorkflow(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// In a real implementation, you would:
-	// 1. Create a Config struct from suite.Config  
+	// 1. Create a Config struct from suite.Config
 	// 2. Set DryRun = false
 	// 3. Call the main certificate renewal workflow
 	// 4. Verify certificate generation, upload, and service restart
@@ -251,19 +251,19 @@ func TestE2E_FullRenewalWorkflow(t *testing.T) {
 
 	// Simulate the full renewal workflow
 	t.Log("Full renewal workflow would be executed here")
-	
+
 	// 1. AWS credential validation
 	t.Log("AWS credentials would be validated")
-	
+
 	// 2. Certificate expiration check
 	t.Log("Certificate expiration would be checked")
-	
+
 	// 3. Certificate generation via ACME
 	t.Log("New certificate would be generated via ACME")
-	
+
 	// 4. Certificate upload to ESXi
 	t.Log("Certificate would be uploaded to ESXi")
-	
+
 	// 5. ESXi service restart
 	t.Log("ESXi services would be restarted")
 
@@ -273,7 +273,7 @@ func TestE2E_FullRenewalWorkflow(t *testing.T) {
 
 	// Verify expected operations occurred
 	commands := suite.MockESXiServer.GetExecutedCommands()
-	
+
 	// Should include backup, file permissions, and service restart commands
 	expectedCommands := []string{"cp -f", "chmod", "hostd restart"}
 	for _, expected := range expectedCommands {
@@ -327,7 +327,7 @@ func TestE2E_ForceRenewalWorkflow(t *testing.T) {
 
 	// In force mode, renewal should happen regardless of expiration
 	t.Log("Force renewal workflow would bypass expiration checks")
-	
+
 	// Simulate force renewal operations
 	suite.simulateCertificateUpload(t)
 	suite.simulateServiceRestart(t)
@@ -384,7 +384,7 @@ func TestE2E_ErrorHandling(t *testing.T) {
 				break
 			}
 		}
-		
+
 		if !foundFailedCommand {
 			t.Error("Expected failed service restart command to be attempted")
 		}
@@ -409,11 +409,11 @@ func (suite *E2ETestSuite) simulateCertificateUpload(t *testing.T) {
 	// Simulate the certificate upload workflow
 	testCertContent := "-----BEGIN CERTIFICATE-----\ntest cert content\n-----END CERTIFICATE-----"
 	testKeyContent := "-----BEGIN PRIVATE KEY-----\ntest key content\n-----END PRIVATE KEY-----"
-	
+
 	// Add files to mock server as if they were uploaded
 	suite.MockESXiServer.files["/etc/vmware/ssl/rui.crt"] = []byte(testCertContent)
 	suite.MockESXiServer.files["/etc/vmware/ssl/rui.key"] = []byte(testKeyContent)
-	
+
 	// Add expected commands that would be executed
 	suite.MockESXiServer.commands = append(suite.MockESXiServer.commands,
 		"cp -f /etc/vmware/ssl/rui.crt /etc/vmware/ssl/rui.crt.backup",
@@ -478,7 +478,7 @@ func TestE2E_ConfigurationValidation(t *testing.T) {
 			for k, v := range suite.Config {
 				config[k] = v
 			}
-			
+
 			// Apply modifications
 			for k, v := range tc.configMods {
 				config[k] = v
@@ -490,7 +490,7 @@ func TestE2E_ConfigurationValidation(t *testing.T) {
 			// 3. Check if validation passes or fails as expected
 
 			t.Logf("Configuration validation test: %s", tc.description)
-			
+
 			// For now, just verify the test configuration is set up correctly
 			if tc.shouldFail {
 				t.Log("This configuration should fail validation")

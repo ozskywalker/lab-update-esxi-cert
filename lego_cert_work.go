@@ -72,16 +72,6 @@ func (u *User) GetPrivateKey() crypto.PrivateKey {
 	return u.Key
 }
 
-// Check if certificate needs renewal based on threshold
-func checkCertificate(hostname string, threshold float64) (bool, *x509.Certificate) {
-	needsRenewal, cert, err := checkCertificateWithDialer(hostname, threshold, &DefaultTLSDialer{})
-	if err != nil {
-		logError("Failed to check certificate: %v", err)
-		os.Exit(1)
-	}
-	return needsRenewal, cert
-}
-
 // Check if certificate needs renewal based on threshold with custom TLS dialer
 func checkCertificateWithDialer(hostname string, threshold float64, dialer TLSDialer) (bool, *x509.Certificate, error) {
 	logInfo("Checking certificate for %s with threshold %.2f", hostname, threshold)
@@ -93,7 +83,7 @@ func checkCertificateWithDialer(hostname string, threshold float64, dialer TLSDi
 		host = hostname
 		port = "443"
 	}
-	
+
 	// Connect to server and get certificate
 	conn, err := dialer.Dial("tcp", net.JoinHostPort(host, port), &tls.Config{
 		InsecureSkipVerify: true,
@@ -108,7 +98,7 @@ func checkCertificateWithDialer(hostname string, threshold float64, dialer TLSDi
 	if len(certs) == 0 {
 		return false, nil, fmt.Errorf("no certificates found for %s", hostname)
 	}
-	
+
 	cert := certs[0]
 	logInfo("Certificate subject: %s", cert.Subject)
 	logInfo("Issuer: %s", cert.Issuer)
@@ -697,16 +687,6 @@ func stopSSHService(ctx context.Context, serviceSystem *object.HostServiceSystem
 	return nil
 }
 
-// Validate that the new certificate is installed on the ESXi server
-func validateCertificate(hostname string, oldCert *x509.Certificate) bool {
-	validated, err := validateCertificateWithDialer(hostname, oldCert, &DefaultTLSDialer{}, maxCheckDuration, defaultCheckInterval)
-	if err != nil {
-		logWarn("Certificate validation error: %v", err)
-		return false
-	}
-	return validated
-}
-
 // Validate that the new certificate is installed on the ESXi server with custom dialer and timeouts
 func validateCertificateWithDialer(hostname string, oldCert *x509.Certificate, dialer TLSDialer, maxDuration, checkInterval time.Duration) (bool, error) {
 	logInfo("Validating certificate installation on %s", hostname)
@@ -738,13 +718,13 @@ func validateCertificateWithDialer(hostname string, oldCert *x509.Certificate, d
 		// Get the new certificate
 		certs := conn.ConnectionState().PeerCertificates
 		conn.Close()
-		
+
 		if len(certs) == 0 {
 			logWarn("No certificates found for %s. Retrying in %s...", hostname, checkInterval)
 			time.Sleep(checkInterval)
 			continue
 		}
-		
+
 		newCert := certs[0]
 
 		// Check if the certificate has changed

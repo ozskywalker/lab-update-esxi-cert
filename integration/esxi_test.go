@@ -152,13 +152,13 @@ func (s *MockSSHServer) handleSession(channel ssh.Channel, requests <-chan *ssh.
 				req.Reply(false, nil)
 				continue
 			}
-			
+
 			commandLen := int(req.Payload[3])
 			if len(req.Payload) < 4+commandLen {
 				req.Reply(false, nil)
 				continue
 			}
-			
+
 			command := string(req.Payload[4 : 4+commandLen])
 			s.commands = append(s.commands, command)
 
@@ -198,35 +198,35 @@ func (s *MockSSHServer) executeCommand(channel ssh.Channel, command string) {
 	case strings.HasPrefix(command, "cat >"):
 		// Handle file upload
 		s.handleFileUpload(channel, command)
-		
+
 	case strings.HasPrefix(command, "ls -la"):
 		// Mock directory listing
 		output := "-rw-r--r-- 1 root root 1234 Jan 01 12:00 rui.crt\n-rw------- 1 root root 1679 Jan 01 12:00 rui.key\n"
 		channel.Write([]byte(output))
-		
+
 	case strings.Contains(command, "cp -f"):
 		// Mock file copy (backup)
 		// No output needed
-		
+
 	case strings.Contains(command, "chmod"):
 		// Mock permission change
 		// No output needed
-		
+
 	case strings.Contains(command, "chown"):
 		// Mock ownership change
 		// No output needed
-		
+
 	case strings.Contains(command, "/etc/init.d/hostd restart"):
 		// Mock hostd service restart
 		channel.Write([]byte("Restarting hostd: [  OK  ]\n"))
-		
+
 	case strings.Contains(command, "/etc/init.d/vpxa restart"):
 		// Mock vpxa service restart (may fail on standalone hosts)
 		if strings.Contains(command, "vpxa") {
 			// Simulate occasional failure for vpxa on standalone hosts
 			channel.Write([]byte("vpxa: not running\n"))
 		}
-		
+
 	default:
 		// Default success for unknown commands
 		channel.Write([]byte("OK\n"))
@@ -339,7 +339,7 @@ func TestSSHFileUpload(t *testing.T) {
 	// Simulate uploading a certificate file
 	testContent := "test certificate content"
 	session.Stdin = strings.NewReader(testContent)
-	
+
 	err = session.Run("cat > /etc/vmware/ssl/rui.crt")
 	if err != nil {
 		t.Fatalf("Failed to upload file: %v", err)
@@ -401,7 +401,7 @@ func TestSSHServiceManagement(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	output, err = session.CombinedOutput("/etc/init.d/vpxa restart")
+	_, err = session.CombinedOutput("/etc/init.d/vpxa restart")
 	session.Close()
 	// vpxa restart may fail on standalone hosts - that's expected
 
@@ -409,7 +409,7 @@ func TestSSHServiceManagement(t *testing.T) {
 	commands := server.GetExecutedCommands()
 	hostdFound := false
 	vpxaFound := false
-	
+
 	for _, cmd := range commands {
 		if strings.Contains(cmd, "hostd restart") {
 			hostdFound = true
@@ -498,7 +498,7 @@ func TestSSHCommandFailure(t *testing.T) {
 
 	err = session.Run("/etc/init.d/hostd restart")
 	session.Close()
-	
+
 	if err == nil {
 		t.Error("Expected hostd restart command to fail")
 	}
@@ -521,7 +521,7 @@ acc+cVm3MWAtIISPWE3mddXAAAAEGF6Z1JCZjhzaGlAY2l0YWRlbHMAAAAAQg==
 		// If parsing fails, generate a simple key for testing
 		return generateSimpleHostKey()
 	}
-	
+
 	return signer, nil
 }
 

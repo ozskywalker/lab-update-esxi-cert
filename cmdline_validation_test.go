@@ -18,7 +18,7 @@ func TestParseArgs_ValidConfiguration(t *testing.T) {
 	os.Args = []string{
 		"test-program",
 		"-hostname", "test.example.com",
-		"-domain", "example.com", 
+		"-domain", "example.com",
 		"-email", "test@example.com",
 		"-aws-key-id", "AKIATEST123",
 		"-aws-secret-key", "test-secret",
@@ -63,7 +63,7 @@ func TestParseArgs_ConfigFile(t *testing.T) {
 	configBuilder := testutil.NewConfigBuilder()
 	tempDir := t.TempDir()
 	configFile := tempDir + "/test.json"
-	
+
 	err := configBuilder.WriteToFile(configFile)
 	if err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
@@ -94,7 +94,7 @@ func TestParseArgs_EnvironmentVariables(t *testing.T) {
 	configBuilder := testutil.NewConfigBuilder().
 		WithHostname("env-test.example.com").
 		WithEmail("env@example.com")
-	
+
 	cleanup := configBuilder.SetEnv()
 	defer cleanup()
 
@@ -103,7 +103,7 @@ func TestParseArgs_EnvironmentVariables(t *testing.T) {
 		"test-program",
 		"-aws-key-id", "AKIATEST123",
 		"-aws-secret-key", "test-secret",
-		"-esxi-user", "root", 
+		"-esxi-user", "root",
 		"-esxi-pass", "password",
 	}
 	defer func() { os.Args = oldArgs }()
@@ -129,7 +129,7 @@ func TestParseArgs_PrecedenceOrder(t *testing.T) {
 	configBuilder := testutil.NewConfigBuilder().WithHostname("config-file.example.com")
 	tempDir := t.TempDir()
 	configFile := tempDir + "/test.json"
-	
+
 	err := configBuilder.WriteToFile(configFile)
 	if err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
@@ -165,33 +165,33 @@ func TestParseArgs_PrecedenceOrder(t *testing.T) {
 
 func TestParseArgs_InvalidConfigurations(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		name       string
+		args       []string
 		shouldFail bool
 	}{
 		{
-			name: "missing hostname",
-			args: []string{"test-program", "-domain", "example.com", "-email", "test@example.com"},
+			name:       "missing hostname",
+			args:       []string{"test-program", "-domain", "example.com", "-email", "test@example.com"},
 			shouldFail: true,
 		},
 		{
-			name: "missing AWS credentials",
-			args: []string{"test-program", "-hostname", "test.example.com", "-domain", "example.com", "-email", "test@example.com"},
+			name:       "missing AWS credentials",
+			args:       []string{"test-program", "-hostname", "test.example.com", "-domain", "example.com", "-email", "test@example.com"},
 			shouldFail: true,
 		},
 		{
-			name: "dry-run and force together",
-			args: []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-dry-run", "-force"},
+			name:       "dry-run and force together",
+			args:       []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-dry-run", "-force"},
 			shouldFail: true,
 		},
 		{
-			name: "invalid key size",
-			args: []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-key-size", "1024"},
+			name:       "invalid key size",
+			args:       []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-key-size", "1024"},
 			shouldFail: true,
 		},
 		{
-			name: "invalid threshold",
-			args: []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-threshold", "1.5"},
+			name:       "invalid threshold",
+			args:       []string{"test-program", "-hostname", "test.example.com", "-aws-key-id", "key", "-aws-secret-key", "secret", "-threshold", "1.5"},
 			shouldFail: true,
 		},
 	}
@@ -199,13 +199,13 @@ func TestParseArgs_InvalidConfigurations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resetFlags()
-			
+
 			oldArgs := os.Args
 			os.Args = tt.args
 			defer func() { os.Args = oldArgs }()
 
 			_, err := parseArgs()
-			
+
 			if tt.shouldFail && err == nil {
 				t.Errorf("Expected %s to fail validation", tt.name)
 			}

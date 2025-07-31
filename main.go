@@ -66,11 +66,11 @@ type Config struct {
 
 // Dependencies struct for dependency injection in main workflow
 type Dependencies struct {
-	AWSValidator    func(Config) error
-	CertChecker     func(string, float64) (bool, *x509.Certificate, error)
-	CertGenerator   func(Config) (string, string, error)
-	CertUploader    func(Config, string, string) error
-	CertValidator   func(string, *x509.Certificate) (bool, error)
+	AWSValidator  func(Config) error
+	CertChecker   func(string, float64) (bool, *x509.Certificate, error)
+	CertGenerator func(Config) (string, string, error)
+	CertUploader  func(Config, string, string) error
+	CertValidator func(string, *x509.Certificate) (bool, error)
 }
 
 // Parse log level from string
@@ -212,7 +212,7 @@ func runWorkflow(config Config, deps Dependencies) error {
 	if err != nil {
 		return fmt.Errorf("certificate check failed: %v", err)
 	}
-	
+
 	if config.Force {
 		logInfo("Force renewal enabled - bypassing expiration threshold check")
 		needsRenewal = true

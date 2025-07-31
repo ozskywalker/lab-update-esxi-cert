@@ -15,19 +15,19 @@ type ConfigBuilder struct {
 func NewConfigBuilder() *ConfigBuilder {
 	return &ConfigBuilder{
 		config: map[string]interface{}{
-			"hostname":      "test.example.com",
-			"domain":        "example.com",
-			"email":         "test@example.com",
-			"threshold":     0.33,
-			"log_level":     "INFO",
-			"aws_region":    "us-east-1",
-			"key_size":      4096,
-			"dry_run":       false,
-			"force":         false,
-			"aws_key_id":    "AKIATEST12345",
+			"hostname":       "test.example.com",
+			"domain":         "example.com",
+			"email":          "test@example.com",
+			"threshold":      0.33,
+			"log_level":      "INFO",
+			"aws_region":     "us-east-1",
+			"key_size":       4096,
+			"dry_run":        false,
+			"force":          false,
+			"aws_key_id":     "AKIATEST12345",
 			"aws_secret_key": "test-secret-key-123",
-			"esxi_username": "root",
-			"esxi_password": "test-password",
+			"esxi_username":  "root",
+			"esxi_password":  "test-password",
 		},
 	}
 }
@@ -128,28 +128,28 @@ func (cb *ConfigBuilder) SetEnv() func() {
 	var cleanupFuncs []func()
 
 	envMappings := map[string]string{
-		"hostname":           "ESXI_HOSTNAME",
-		"domain":             "AWS_ROUTE53_DOMAIN",
-		"email":              "EMAIL",
-		"threshold":          "CERT_THRESHOLD",
-		"log_file":           "LOG_FILE",
-		"log_level":          "LOG_LEVEL",
-		"aws_key_id":         "AWS_ACCESS_KEY_ID",
-		"aws_secret_key":     "AWS_SECRET_ACCESS_KEY",
-		"aws_session_token":  "AWS_SESSION_TOKEN",
-		"aws_region":         "AWS_REGION",
-		"dry_run":            "DRY_RUN",
-		"force":              "FORCE_RENEWAL",
-		"key_size":           "CERT_KEY_SIZE",
-		"esxi_username":      "ESXI_USERNAME",
-		"esxi_password":      "ESXI_PASSWORD",
+		"hostname":          "ESXI_HOSTNAME",
+		"domain":            "AWS_ROUTE53_DOMAIN",
+		"email":             "EMAIL",
+		"threshold":         "CERT_THRESHOLD",
+		"log_file":          "LOG_FILE",
+		"log_level":         "LOG_LEVEL",
+		"aws_key_id":        "AWS_ACCESS_KEY_ID",
+		"aws_secret_key":    "AWS_SECRET_ACCESS_KEY",
+		"aws_session_token": "AWS_SESSION_TOKEN",
+		"aws_region":        "AWS_REGION",
+		"dry_run":           "DRY_RUN",
+		"force":             "FORCE_RENEWAL",
+		"key_size":          "CERT_KEY_SIZE",
+		"esxi_username":     "ESXI_USERNAME",
+		"esxi_password":     "ESXI_PASSWORD",
 	}
 
 	for configKey, envVar := range envMappings {
 		if value, exists := cb.config[configKey]; exists {
 			oldValue := os.Getenv(envVar)
 			os.Setenv(envVar, toString(value))
-			
+
 			cleanupFuncs = append(cleanupFuncs, func() {
 				if oldValue == "" {
 					os.Unsetenv(envVar)
@@ -189,15 +189,15 @@ func toString(value interface{}) string {
 // CreateInvalidConfigs returns various invalid configurations for testing
 func CreateInvalidConfigs() map[string]*ConfigBuilder {
 	return map[string]*ConfigBuilder{
-		"missing_hostname": NewConfigBuilder().WithHostname(""),
-		"missing_aws_key": NewConfigBuilder().WithAWSCredentials("", "secret", "", "us-east-1"),
-		"missing_aws_secret": NewConfigBuilder().WithAWSCredentials("key", "", "", "us-east-1"),
-		"invalid_threshold_too_low": NewConfigBuilder().WithThreshold(-0.1),
-		"invalid_threshold_too_high": NewConfigBuilder().WithThreshold(1.0),
-		"invalid_key_size": NewConfigBuilder().WithKeySize(1024),
-		"dry_run_and_force": NewConfigBuilder().WithDryRun(true).WithForce(true),
-		"missing_domain_non_dry_run": NewConfigBuilder().WithDomain("").WithDryRun(false),
-		"missing_email_non_dry_run": NewConfigBuilder().WithEmail("").WithDryRun(false),
+		"missing_hostname":               NewConfigBuilder().WithHostname(""),
+		"missing_aws_key":                NewConfigBuilder().WithAWSCredentials("", "secret", "", "us-east-1"),
+		"missing_aws_secret":             NewConfigBuilder().WithAWSCredentials("key", "", "", "us-east-1"),
+		"invalid_threshold_too_low":      NewConfigBuilder().WithThreshold(-0.1),
+		"invalid_threshold_too_high":     NewConfigBuilder().WithThreshold(1.0),
+		"invalid_key_size":               NewConfigBuilder().WithKeySize(1024),
+		"dry_run_and_force":              NewConfigBuilder().WithDryRun(true).WithForce(true),
+		"missing_domain_non_dry_run":     NewConfigBuilder().WithDomain("").WithDryRun(false),
+		"missing_email_non_dry_run":      NewConfigBuilder().WithEmail("").WithDryRun(false),
 		"missing_esxi_creds_non_dry_run": NewConfigBuilder().WithESXiCredentials("", "").WithDryRun(false),
 	}
 }

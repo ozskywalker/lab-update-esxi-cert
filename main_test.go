@@ -95,9 +95,9 @@ func TestLoggingLevelFiltering(t *testing.T) {
 	currentLogLevel = LOG_WARN
 
 	tests := []struct {
-		logFunc     func(string, ...interface{})
-		message     string
-		shouldShow  bool
+		logFunc    func(string, ...interface{})
+		message    string
+		shouldShow bool
 	}{
 		{logError, "error message", true},
 		{logWarn, "warning message", true},
@@ -108,10 +108,10 @@ func TestLoggingLevelFiltering(t *testing.T) {
 	for _, tt := range tests {
 		buf.Reset()
 		tt.logFunc(tt.message)
-		
+
 		output := buf.String()
 		hasOutput := len(strings.TrimSpace(output)) > 0
-		
+
 		if tt.shouldShow && !hasOutput {
 			t.Errorf("Expected message %s to be logged at level %d", tt.message, currentLogLevel)
 		}
@@ -187,7 +187,7 @@ func TestSetupLogging_InvalidFile(t *testing.T) {
 
 	// Try to create log file in non-existent directory
 	invalidPath := "/nonexistent/directory/test.log"
-	
+
 	// This should handle the error gracefully
 	setupLogging(invalidPath, "INFO")
 
@@ -488,15 +488,15 @@ func TestConstants(t *testing.T) {
 	if defaultThreshold != 0.33 {
 		t.Errorf("Expected default threshold 0.33, got %f", defaultThreshold)
 	}
-	
+
 	if defaultCheckInterval != 30*time.Second {
 		t.Errorf("Expected default check interval 30s, got %v", defaultCheckInterval)
 	}
-	
+
 	if maxCheckDuration != 5*time.Minute {
 		t.Errorf("Expected max check duration 5m, got %v", maxCheckDuration)
 	}
-	
+
 	if acmeServerProduction != "https://acme-v02.api.letsencrypt.org/directory" {
 		t.Errorf("Expected Let's Encrypt production URL, got %s", acmeServerProduction)
 	}
@@ -512,7 +512,7 @@ func TestLogLevelNames(t *testing.T) {
 
 	for level, expectedName := range expectedNames {
 		if logLevelNames[level] != expectedName {
-			t.Errorf("Expected log level %d to have name %s, got %s", 
+			t.Errorf("Expected log level %d to have name %s, got %s",
 				level, expectedName, logLevelNames[level])
 		}
 	}
@@ -548,7 +548,7 @@ func TestConfigStruct(t *testing.T) {
 	if config.KeySize <= 0 {
 		t.Error("KeySize should be positive")
 	}
-	
+
 	// Test boolean fields
 	if config.DryRun == config.Force {
 		// This is fine - just testing the fields exist and are accessible
@@ -562,7 +562,7 @@ func TestLoggingStructure(t *testing.T) {
 		t.Error("LOG_ERROR should have lower value than LOG_WARN")
 	}
 	if LOG_WARN > LOG_INFO {
-		t.Error("LOG_WARN should have lower value than LOG_INFO") 
+		t.Error("LOG_WARN should have lower value than LOG_INFO")
 	}
 	if LOG_INFO > LOG_DEBUG {
 		t.Error("LOG_INFO should have lower value than LOG_DEBUG")

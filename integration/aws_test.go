@@ -261,7 +261,7 @@ func TestRoute53DNSChallenge(t *testing.T) {
 	// 4. Clean up TXT record
 
 	t.Log("Mock Route53 server started at:", mockServer.URL)
-	
+
 	// In a real test, you would:
 	// 1. Create Route53 client with mock endpoint
 	// 2. Use lego Route53 provider with mock
@@ -270,14 +270,14 @@ func TestRoute53DNSChallenge(t *testing.T) {
 
 	// For now, just verify the mock server responds correctly
 	client := &http.Client{Timeout: 5 * time.Second}
-	
+
 	// Test hosted zone listing
 	resp, err := client.Get(mockServer.URL + "/2013-04-01/hostedzone")
 	if err != nil {
 		t.Fatalf("Failed to get hosted zones: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
@@ -287,7 +287,7 @@ func TestRoute53DNSChallenge(t *testing.T) {
 func TestAWSRegionValidation(t *testing.T) {
 	regions := []string{
 		"us-east-1",
-		"us-west-2", 
+		"us-west-2",
 		"eu-west-1",
 		"ap-southeast-1",
 	}

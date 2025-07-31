@@ -53,20 +53,20 @@ func TestConfigManager_LoadEnvironmentVariables(t *testing.T) {
 
 	// Set up test environment variables
 	testEnvVars := map[string]string{
-		"ESXI_HOSTNAME":       "test-env.example.com",
-		"AWS_ROUTE53_DOMAIN":  "env.example.com",
-		"EMAIL":               "env@example.com",
-		"CERT_THRESHOLD":      "0.5",
-		"LOG_LEVEL":           "DEBUG",
-		"AWS_ACCESS_KEY_ID":   "AKIAENVTEST123",
+		"ESXI_HOSTNAME":         "test-env.example.com",
+		"AWS_ROUTE53_DOMAIN":    "env.example.com",
+		"EMAIL":                 "env@example.com",
+		"CERT_THRESHOLD":        "0.5",
+		"LOG_LEVEL":             "DEBUG",
+		"AWS_ACCESS_KEY_ID":     "AKIAENVTEST123",
 		"AWS_SECRET_ACCESS_KEY": "env-secret-key",
-		"AWS_SESSION_TOKEN":   "env-session-token",
-		"AWS_REGION":          "us-west-2",
-		"DRY_RUN":             "true",
-		"FORCE_RENEWAL":       "false",
-		"CERT_KEY_SIZE":       "2048",
-		"ESXI_USERNAME":       "admin",
-		"ESXI_PASSWORD":       "env-password",
+		"AWS_SESSION_TOKEN":     "env-session-token",
+		"AWS_REGION":            "us-west-2",
+		"DRY_RUN":               "true",
+		"FORCE_RENEWAL":         "false",
+		"CERT_KEY_SIZE":         "2048",
+		"ESXI_USERNAME":         "admin",
+		"ESXI_PASSWORD":         "env-password",
 	}
 
 	// Set environment variables
@@ -301,7 +301,7 @@ func TestConfigManager_ValidateConfig(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				configMap := builder.Build()
 				config := buildConfigFromMap(configMap)
-				
+
 				err := cm.ValidateConfig(config)
 				if err == nil {
 					t.Errorf("Expected invalid configuration %s to fail validation", name)
@@ -318,9 +318,9 @@ func TestConfigManager_ConfigurationPrecedence(t *testing.T) {
 
 	// Create config file
 	configData := map[string]interface{}{
-		"hostname":   "config-file.example.com",
-		"log_level":  "ERROR",
-		"threshold":  0.25,
+		"hostname":  "config-file.example.com",
+		"log_level": "ERROR",
+		"threshold": 0.25,
 	}
 	data, _ := json.Marshal(configData)
 	os.WriteFile(configFile, data, 0644)
@@ -329,7 +329,7 @@ func TestConfigManager_ConfigurationPrecedence(t *testing.T) {
 	os.Setenv("ESXI_HOSTNAME", "env-var.example.com")
 	os.Setenv("LOG_LEVEL", "WARN")
 	defer func() {
-		os.Unsetenv("ESXI_HOSTNAME") 
+		os.Unsetenv("ESXI_HOSTNAME")
 		os.Unsetenv("LOG_LEVEL")
 	}()
 
@@ -402,7 +402,7 @@ func TestConfigManager_TypeConversions(t *testing.T) {
 			}
 
 			if value != tc.expected {
-				t.Errorf("Expected %s = %v (type %T), got %v (type %T)", 
+				t.Errorf("Expected %s = %v (type %T), got %v (type %T)",
 					tc.key, tc.expected, tc.expected, value, value)
 			}
 		})
@@ -412,7 +412,7 @@ func TestConfigManager_TypeConversions(t *testing.T) {
 // Helper function to build a Config struct from a map for testing
 func buildConfigFromMap(configMap map[string]interface{}) Config {
 	config := Config{}
-	
+
 	if v, ok := configMap["hostname"].(string); ok {
 		config.Hostname = v
 	}
@@ -455,7 +455,7 @@ func buildConfigFromMap(configMap map[string]interface{}) Config {
 	if v, ok := configMap["esxi_password"].(string); ok {
 		config.ESXiPassword = v
 	}
-	
+
 	// Set defaults for required fields if not present
 	if config.LogLevel == "" {
 		config.LogLevel = "INFO"
@@ -469,6 +469,6 @@ func buildConfigFromMap(configMap map[string]interface{}) Config {
 	if config.Threshold == 0 {
 		config.Threshold = defaultThreshold
 	}
-	
+
 	return config
 }

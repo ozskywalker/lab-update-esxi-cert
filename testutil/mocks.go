@@ -41,7 +41,6 @@ func (m *MockSTSClient) GetCallerIdentity(ctx context.Context, params *sts.GetCa
 
 // MockTLSServer creates a mock TLS server for certificate testing
 type MockTLSServer struct {
-	server   *httptest.Server
 	listener net.Listener
 	CertPEM  []byte
 	KeyPEM   []byte
@@ -213,7 +212,7 @@ func (m *MockSSHServer) handleSession(channel ssh.Channel, requests <-chan *ssh.
 		case "exec":
 			command := string(req.Payload[4:]) // Skip the length prefix
 			m.Commands = append(m.Commands, command)
-			
+
 			// Check if this command should fail
 			shouldFail := m.ShouldFail
 			for _, failCmd := range m.FailCommands {
@@ -272,7 +271,7 @@ type MockACMEServer struct {
 // NewMockACMEServer creates a new mock ACME server
 func NewMockACMEServer() *MockACMEServer {
 	mux := http.NewServeMux()
-	
+
 	// Mock ACME directory endpoint
 	mux.HandleFunc("/directory", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -287,7 +286,7 @@ func NewMockACMEServer() *MockACMEServer {
 	})
 
 	server := httptest.NewServer(mux)
-	
+
 	return &MockACMEServer{
 		server: server,
 	}
@@ -305,8 +304,8 @@ func (m *MockACMEServer) Close() {
 
 // MockTLSDialer implements the TLSDialer interface for testing
 type MockTLSDialer struct {
-	CertPEM []byte
-	KeyPEM  []byte
+	CertPEM    []byte
+	KeyPEM     []byte
 	ShouldFail bool
 	FailError  error
 }
@@ -322,7 +321,7 @@ func (m *MockTLSDialer) Dial(network, addr string, config *tls.Config) (*tls.Con
 
 	// Create a mock TLS connection with our test certificate
 	serverConn, clientConn := net.Pipe()
-	
+
 	// Set up the server side with our test certificate
 	go func() {
 		defer serverConn.Close()
@@ -331,20 +330,20 @@ func (m *MockTLSDialer) Dial(network, addr string, config *tls.Config) (*tls.Con
 			if err != nil {
 				return
 			}
-			
+
 			tlsConfig := &tls.Config{
 				Certificates: []tls.Certificate{cert},
 			}
-			
+
 			tlsConn := tls.Server(serverConn, tlsConfig)
 			defer tlsConn.Close()
-			
+
 			// Perform handshake
 			err = tlsConn.Handshake()
 			if err != nil {
 				return
 			}
-			
+
 			// Keep connection open for a short time
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -352,14 +351,14 @@ func (m *MockTLSDialer) Dial(network, addr string, config *tls.Config) (*tls.Con
 
 	// Return client side as TLS connection
 	tlsConn := tls.Client(clientConn, config)
-	
+
 	// Perform handshake with timeout for faster tests
 	err := tlsConn.Handshake()
 	if err != nil {
 		clientConn.Close()
 		return nil, err
 	}
-	
+
 	return tlsConn, nil
 }
 

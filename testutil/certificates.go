@@ -79,7 +79,7 @@ func GenerateNearExpiryCertificate(hostname string, daysUntilExpiry int) (certPE
 
 // GenerateValidCertificate creates a certificate that has plenty of time left
 func GenerateValidCertificate(hostname string) (certPEM, keyPEM []byte, err error) {
-	notBefore := time.Now().Add(-24 * time.Hour) // 1 day ago
+	notBefore := time.Now().Add(-24 * time.Hour)    // 1 day ago
 	notAfter := time.Now().Add(60 * 24 * time.Hour) // 60 days from now
 	return GenerateTestCertificate(hostname, notBefore, notAfter)
 }
@@ -97,7 +97,7 @@ func StartMockTLSServer(certPEM, keyPEM []byte) (*tls.Config, func(), error) {
 
 	// Return config and a no-op cleanup function
 	cleanup := func() {}
-	
+
 	return config, cleanup, nil
 }
 

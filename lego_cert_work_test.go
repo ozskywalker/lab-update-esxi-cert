@@ -2,9 +2,7 @@ package main
 
 import (
 	"crypto/rsa"
-	"crypto/tls"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,7 +121,7 @@ func TestCheckCertificateWithDialer_ConnectionFailure(t *testing.T) {
 
 func TestGetCachedCertificate_ValidCache(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Create a valid cached certificate
 	hostname := "test.example.com"
 	certPEM, keyPEM, err := testutil.GenerateValidCertificate(hostname)
@@ -134,14 +132,14 @@ func TestGetCachedCertificate_ValidCache(t *testing.T) {
 	// Create cache directory and files
 	cacheDir := filepath.Join(tempDir, "esxi-cert-cache")
 	os.MkdirAll(cacheDir, 0755)
-	
+
 	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
 	keyPath := filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname))
-	
+
 	os.WriteFile(certPath, certPEM, 0600)
 	os.WriteFile(keyPath, keyPEM, 0600)
 
-	// Note: In a real implementation, you'd need to refactor getCachedCertificate 
+	// Note: In a real implementation, you'd need to refactor getCachedCertificate
 	// to accept a tempDir parameter for testability
 	// For now, we'll skip this test aspect
 	t.Skip("Test requires refactoring getCachedCertificate to accept tempDir parameter")
@@ -165,7 +163,7 @@ func TestGetCachedCertificate_ForceSkipsCache(t *testing.T) {
 
 func TestGetCachedCertificate_NearExpiryCache(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Create a certificate that's close to expiration (< 50% remaining)
 	hostname := "test.example.com"
 	certPEM, keyPEM, err := testutil.GenerateNearExpiryCertificate(hostname, 10) // 10 days left
@@ -176,10 +174,10 @@ func TestGetCachedCertificate_NearExpiryCache(t *testing.T) {
 	// Create cache directory and files
 	cacheDir := filepath.Join(tempDir, "esxi-cert-cache")
 	os.MkdirAll(cacheDir, 0755)
-	
+
 	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
 	keyPath := filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname))
-	
+
 	os.WriteFile(certPath, certPEM, 0600)
 	os.WriteFile(keyPath, keyPEM, 0600)
 
@@ -215,7 +213,7 @@ func TestGeneratePrivateKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := Config{KeySize: tt.keySize}
-			
+
 			key := generatePrivateKey(config)
 			if key == nil {
 				t.Error("Expected private key to be generated")
@@ -238,7 +236,7 @@ func TestGeneratePrivateKey_InvalidSize(t *testing.T) {
 	// This would normally call os.Exit(1) due to key generation failure
 	// Test that unusual key sizes get corrected to 4096
 	config := Config{KeySize: 1024}
-	
+
 	key := generatePrivateKey(config)
 	if key == nil {
 		t.Error("Expected private key to be generated even with unusual size")
@@ -301,7 +299,7 @@ func TestValidateCertificateWithDialer_CertificateChanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate old test certificate: %v", err)
 	}
-	
+
 	oldCert, err := testutil.ParseCertificatePEM(oldCertPEM)
 	if err != nil {
 		t.Fatalf("Failed to parse old certificate: %v", err)
@@ -336,7 +334,7 @@ func TestValidateCertificateWithDialer_SameCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate test certificate: %v", err)
 	}
-	
+
 	cert, err := testutil.ParseCertificatePEM(certPEM)
 	if err != nil {
 		t.Fatalf("Failed to parse certificate: %v", err)
@@ -366,7 +364,7 @@ func TestValidateCertificateWithDialer_ConnectionFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate test certificate: %v", err)
 	}
-	
+
 	cert, err := testutil.ParseCertificatePEM(certPEM)
 	if err != nil {
 		t.Fatalf("Failed to parse certificate: %v", err)
@@ -386,42 +384,6 @@ func TestValidateCertificateWithDialer_ConnectionFailure(t *testing.T) {
 	if validated {
 		t.Error("Expected validation to fail when connections fail")
 	}
-}
-
-// Helper function to start a TLS server on a specific port for testing
-func startTestTLSServer(t *testing.T, certPEM, keyPEM []byte) (string, func()) {
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		t.Fatalf("Failed to create X509 key pair: %v", err)
-	}
-
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
-
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return // Server closed
-			}
-
-			tlsConn := tls.Server(conn, tlsConfig)
-			go func() {
-				defer tlsConn.Close()
-				tlsConn.Handshake()
-				// Keep connection open briefly
-				time.Sleep(100 * time.Millisecond)
-			}()
-		}
-	}()
-
-	return listener.Addr().String(), func() { listener.Close() }
 }
 
 func TestGenerateCertificate_Integration(t *testing.T) {
