@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -258,9 +260,19 @@ func (m *MockSSHServer) handleCommand(channel ssh.Channel, command string) {
 
 // generateSSHHostKey generates an SSH host key for the mock server
 func generateSSHHostKey() (ssh.Signer, error) {
-	// For simplicity, we'll just return an error if we can't generate a key
-	// In a real implementation, you'd generate an actual key
-	return nil, fmt.Errorf("SSH host key generation not implemented in mock")
+	// Generate RSA private key for testing
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate RSA key: %v", err)
+	}
+
+	// Convert to SSH signer
+	signer, err := ssh.NewSignerFromKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH signer: %v", err)
+	}
+
+	return signer, nil
 }
 
 // MockACMEServer provides a mock ACME server for testing certificate generation

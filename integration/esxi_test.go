@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"net"
 	"strings"
@@ -242,9 +244,26 @@ func (s *MockSSHServer) handleFileUpload(channel ssh.Channel, command string) {
 	}
 	filename := parts[2]
 
-	// Read data from stdin (in a real implementation)
-	// For testing, we'll just store that the file was "uploaded"
-	s.files[filename] = []byte("mock file content")
+	// Read data from channel stdin and store it
+	buffer := make([]byte, 1024)
+	var content []byte
+	for {
+		n, err := channel.Read(buffer)
+		if n > 0 {
+			content = append(content, buffer[:n]...)
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	// Store the uploaded content
+	if len(content) > 0 {
+		s.files[filename] = content
+	} else {
+		// If no content read, store mock content
+		s.files[filename] = []byte("mock file content")
+	}
 }
 
 // TestSSHConnection tests basic SSH connectivity to mock ESXi server
@@ -349,8 +368,8 @@ func TestSSHFileUpload(t *testing.T) {
 	files := server.GetUploadedFiles()
 	if content, exists := files["/etc/vmware/ssl/rui.crt"]; !exists {
 		t.Error("Expected certificate file to be uploaded")
-	} else if string(content) != "mock file content" {
-		t.Errorf("Expected mock content, got: %s", string(content))
+	} else if string(content) != testContent {
+		t.Errorf("Expected test content '%s', got: %s", testContent, string(content))
 	}
 }
 
@@ -401,7 +420,7 @@ func TestSSHServiceManagement(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	_, err = session.CombinedOutput("/etc/init.d/vpxa restart")
+	_, _ = session.CombinedOutput("/etc/init.d/vpxa restart")
 	session.Close()
 	// vpxa restart may fail on standalone hosts - that's expected
 
@@ -527,7 +546,17 @@ acc+cVm3MWAtIISPWE3mddXAAAAEGF6Z1JCZjhzaGlAY2l0YWRlbHMAAAAAQg==
 
 // generateSimpleHostKey generates a simple RSA key for testing if Ed25519 fails
 func generateSimpleHostKey() (ssh.Signer, error) {
-	// This is a simplified implementation for testing
-	// In practice, you'd generate a proper host key
-	return nil, fmt.Errorf("host key generation not implemented - using mock")
+	// Generate RSA private key for testing
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate RSA key: %v", err)
+	}
+
+	// Convert to SSH signer
+	signer, err := ssh.NewSignerFromKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH signer: %v", err)
+	}
+
+	return signer, nil
 }

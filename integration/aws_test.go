@@ -141,9 +141,14 @@ func TestAWSCredentialValidationFailure(t *testing.T) {
 func TestAWSSessionTokenValidation(t *testing.T) {
 	// Create mock STS server for session token validation
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check for session token in the request
+		// Check for session token in the request (can be in header or query)
 		authHeader := r.Header.Get("Authorization")
-		if !strings.Contains(authHeader, "X-Amz-Security-Token") {
+		securityTokenHeader := r.Header.Get("X-Amz-Security-Token")
+		securityTokenQuery := r.URL.Query().Get("X-Amz-Security-Token")
+
+		// Accept if session token is present in any form
+		if !strings.Contains(authHeader, "X-Amz-Security-Token") &&
+			securityTokenHeader == "" && securityTokenQuery == "" {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}

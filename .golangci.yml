@@ -15,3 +15,9 @@ linters:
       - path: _test\.go
         linters:
           - govet
+      - path: integration/aws_test.go
+        # Ignore AWS SDK v2 deprecation warnings (SA1019) in integration tests
+        # These will be fixed when we rewrite to service-specific endpoints  
+        text: "SA1019"
+        linters:
+          - staticcheck  

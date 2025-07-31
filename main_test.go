@@ -549,10 +549,8 @@ func TestConfigStruct(t *testing.T) {
 		t.Error("KeySize should be positive")
 	}
 
-	// Test boolean fields
-	if config.DryRun == config.Force {
-		// This is fine - just testing the fields exist and are accessible
-	}
+	// Test boolean fields are accessible
+	_ = config.DryRun && config.Force // Just testing the fields exist and are accessible
 }
 
 // Helper function to test the structure of the logging system

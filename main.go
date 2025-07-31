@@ -215,7 +215,6 @@ func runWorkflow(config Config, deps Dependencies) error {
 
 	if config.Force {
 		logInfo("Force renewal enabled - bypassing expiration threshold check")
-		needsRenewal = true
 	} else if !needsRenewal {
 		logInfo("Certificate for %s is still valid (expires on %s) and doesn't need renewal yet.",
 			config.Hostname, certInfo.NotAfter.Format(time.RFC3339))
