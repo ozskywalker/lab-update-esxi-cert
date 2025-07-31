@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log"
@@ -61,6 +62,15 @@ type Config struct {
 	KeySize             int
 	ESXiUsername        string
 	ESXiPassword        string
+}
+
+// Dependencies struct for dependency injection in main workflow
+type Dependencies struct {
+	AWSValidator    func(Config) error
+	CertChecker     func(string, float64) (bool, *x509.Certificate, error)
+	CertGenerator   func(Config) (string, string, error)
+	CertUploader    func(Config, string, string) error
+	CertValidator   func(string, *x509.Certificate) (bool, error)
 }
 
 // Parse log level from string
@@ -154,6 +164,94 @@ func validateAWSCredentials(config Config) error {
 	return nil
 }
 
+// GetDefaultDependencies returns the default dependencies for production use
+func GetDefaultDependencies() Dependencies {
+	return Dependencies{
+		AWSValidator: validateAWSCredentials,
+		CertChecker: func(hostname string, threshold float64) (bool, *x509.Certificate, error) {
+			return checkCertificateWithDialer(hostname, threshold, &DefaultTLSDialer{})
+		},
+		CertGenerator: generateCertificate,
+		CertUploader:  uploadCertificate,
+		CertValidator: func(hostname string, oldCert *x509.Certificate) (bool, error) {
+			return validateCertificateWithDialer(hostname, oldCert, &DefaultTLSDialer{}, maxCheckDuration, defaultCheckInterval)
+		},
+	}
+}
+
+// runWorkflow executes the main certificate renewal workflow with dependency injection
+func runWorkflow(config Config, deps Dependencies) error {
+	// Log version information
+	v := version.Get()
+	logInfo("Starting %s", v.String())
+
+	// Check for updates and display notification
+	if updateMsg := version.GetUpdateNotification(); updateMsg != "" {
+		logInfo(updateMsg)
+		fmt.Println(updateMsg)
+	}
+
+	// Validate AWS credentials (required for both dry-run and normal execution)
+	err := deps.AWSValidator(config)
+	if err != nil {
+		return fmt.Errorf("AWS credential validation failed: %v", err)
+	}
+
+	// If dry run, just check the certificate
+	if config.DryRun {
+		logInfo("Running in dry-run mode. Will only check certificate expiration.")
+		_, _, err := deps.CertChecker(config.Hostname, config.Threshold)
+		if err != nil {
+			return fmt.Errorf("certificate check failed: %v", err)
+		}
+		return nil
+	}
+
+	// Check if the certificate needs renewal (or if force is enabled)
+	needsRenewal, certInfo, err := deps.CertChecker(config.Hostname, config.Threshold)
+	if err != nil {
+		return fmt.Errorf("certificate check failed: %v", err)
+	}
+	
+	if config.Force {
+		logInfo("Force renewal enabled - bypassing expiration threshold check")
+		needsRenewal = true
+	} else if !needsRenewal {
+		logInfo("Certificate for %s is still valid (expires on %s) and doesn't need renewal yet.",
+			config.Hostname, certInfo.NotAfter.Format(time.RFC3339))
+		return nil
+	}
+
+	// Generate a new certificate
+	logInfo("Generating new certificate...")
+	certPath, keyPath, err := deps.CertGenerator(config)
+	if err != nil {
+		return fmt.Errorf("failed to generate certificate: %v", err)
+	}
+	logInfo("Certificate generated successfully: %s", certPath)
+
+	// Upload the certificate to ESXi
+	logInfo("Uploading certificate to ESXi server...")
+	err = deps.CertUploader(config, certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to upload certificate: %v", err)
+	}
+	logInfo("Certificate uploaded successfully.")
+
+	// Validate the certificate installation
+	logInfo("Validating new certificate installation...")
+	validated, err := deps.CertValidator(config.Hostname, certInfo)
+	if err != nil {
+		logWarn("Certificate validation error: %v", err)
+	} else if validated {
+		logInfo("New certificate successfully validated!")
+	} else {
+		logWarn("Could not validate new certificate within the timeout period.")
+	}
+
+	return nil
+}
+
 // Main function
 func main() {
 	// Parse the command-line arguments
@@ -166,65 +264,11 @@ func main() {
 	// Set up logging
 	setupLogging(config.LogFile, config.LogLevel)
 
-	// Log version information
-	v := version.Get()
-	logInfo("Starting %s", v.String())
-
-	// Check for updates and display notification
-	if updateMsg := version.GetUpdateNotification(); updateMsg != "" {
-		logInfo(updateMsg)
-		fmt.Println(updateMsg)
-	}
-
-	// Validate AWS credentials (required for both dry-run and normal execution)
-	err = validateAWSCredentials(config)
+	// Run the main workflow with default dependencies
+	deps := GetDefaultDependencies()
+	err = runWorkflow(config, deps)
 	if err != nil {
-		logError("AWS credential validation failed: %v", err)
+		logError("Workflow failed: %v", err)
 		os.Exit(1)
-	}
-
-	// If dry run, just check the certificate
-	if config.DryRun {
-		logInfo("Running in dry-run mode. Will only check certificate expiration.")
-		checkCertificate(config.Hostname, config.Threshold)
-		return
-	}
-
-	// Check if the certificate needs renewal (or if force is enabled)
-	needsRenewal, certInfo := checkCertificate(config.Hostname, config.Threshold)
-	if config.Force {
-		logInfo("Force renewal enabled - bypassing expiration threshold check")
-		needsRenewal = true //nolint:ineffassign // Intentional override for force renewal
-	} else if !needsRenewal {
-		logInfo("Certificate for %s is still valid (expires on %s) and doesn't need renewal yet.",
-			config.Hostname, certInfo.NotAfter.Format(time.RFC3339))
-		return
-	}
-
-	// Generate a new certificate
-	logInfo("Generating new certificate...")
-	certPath, keyPath, err := generateCertificate(config)
-	if err != nil {
-		logError("Failed to generate certificate: %v", err)
-		os.Exit(1)
-	}
-	logInfo("Certificate generated successfully: %s", certPath)
-
-	// Upload the certificate to ESXi
-	logInfo("Uploading certificate to ESXi server...")
-	err = uploadCertificate(config, certPath, keyPath)
-	if err != nil {
-		logError("Failed to upload certificate: %v", err)
-		os.Exit(1)
-	}
-	logInfo("Certificate uploaded successfully.")
-
-	// Validate the certificate installation
-	logInfo("Validating new certificate installation...")
-	validated := validateCertificate(config.Hostname, certInfo)
-	if validated {
-		logInfo("New certificate successfully validated!")
-	} else {
-		logWarn("Could not validate new certificate within the timeout period.")
 	}
 }

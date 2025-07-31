@@ -84,7 +84,8 @@ changelog:
       order: 999
 
 release:
-  draft: false
+  draft: true
+  replace_existing_draft: true
   prerelease: auto
   mode: replace
   header: |
@@ -93,10 +94,6 @@ release:
     🚀 **Release Highlights**
     
     This release includes cross-platform binaries for Windows, Linux, and macOS.
-    
-    ### 📦 **Installation**
-    
-    Download the appropriate binary for your platform from the assets below.
     
     ### ✅ **Verification**
     
@@ -107,14 +104,6 @@ release:
     
     # Verify checksum (example for Linux)
     sha256sum -c checksums.txt --ignore-missing
-    ```
-    
-    ### 🔄 **Update Checking**
-    
-    This version includes built-in update checking. Configure your GitHub repository details to receive update notifications:
-    ```bash
-    # Check for updates
-    ./lab-update-esxi-cert --check-updates --update-check-owner=yourusername --update-check-repo=lab-update-esxi-cert
     ```
     
   footer: |

@@ -27,11 +27,12 @@ This guide explains how to create releases for the ESXi Certificate Manager.
 
 3. **GitHub Actions automatically**:
    - Builds cross-platform binaries
-   - Creates GitHub release with assets
+   - Creates GitHub draft release with assets
    - Generates changelog
    - Signs and checksums all artifacts
 
-4. **Verify the release**:
+4. **Verify & approve the release**:
+   - Edit the draft and update the release notes
    - Check [GitHub Releases](https://github.com/yourusername/lab-update-esxi-cert/releases)
    - Download and test binaries
    - Verify version information: `./lab-update-esxi-cert --version`

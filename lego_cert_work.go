@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -27,6 +28,19 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/crypto/ssh"
 )
+
+// TLSDialer interface for TLS connections (enables testing with custom dialers)
+type TLSDialer interface {
+	Dial(network, addr string, config *tls.Config) (*tls.Conn, error)
+}
+
+// DefaultTLSDialer implements TLSDialer using standard library
+type DefaultTLSDialer struct{}
+
+// Dial implements TLSDialer interface
+func (d *DefaultTLSDialer) Dial(network, addr string, config *tls.Config) (*tls.Conn, error) {
+	return tls.Dial(network, addr, config)
+}
 
 // User struct for ACME registration
 type User struct {
@@ -60,20 +74,42 @@ func (u *User) GetPrivateKey() crypto.PrivateKey {
 
 // Check if certificate needs renewal based on threshold
 func checkCertificate(hostname string, threshold float64) (bool, *x509.Certificate) {
+	needsRenewal, cert, err := checkCertificateWithDialer(hostname, threshold, &DefaultTLSDialer{})
+	if err != nil {
+		logError("Failed to check certificate: %v", err)
+		os.Exit(1)
+	}
+	return needsRenewal, cert
+}
+
+// Check if certificate needs renewal based on threshold with custom TLS dialer
+func checkCertificateWithDialer(hostname string, threshold float64, dialer TLSDialer) (bool, *x509.Certificate, error) {
 	logInfo("Checking certificate for %s with threshold %.2f", hostname, threshold)
 
+	// Parse hostname to extract host and port
+	host, port, err := net.SplitHostPort(hostname)
+	if err != nil {
+		// If no port specified, assume hostname only and add default port
+		host = hostname
+		port = "443"
+	}
+	
 	// Connect to server and get certificate
-	conn, err := tls.Dial("tcp", hostname+":443", &tls.Config{
+	conn, err := dialer.Dial("tcp", net.JoinHostPort(host, port), &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		logError("Failed to connect to %s: %v", hostname, err)
-		os.Exit(1)
+		return false, nil, fmt.Errorf("failed to connect to %s: %v", hostname, err)
 	}
 	defer conn.Close()
 
 	// Get the certificate
-	cert := conn.ConnectionState().PeerCertificates[0]
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return false, nil, fmt.Errorf("no certificates found for %s", hostname)
+	}
+	
+	cert := certs[0]
 	logInfo("Certificate subject: %s", cert.Subject)
 	logInfo("Issuer: %s", cert.Issuer)
 	logInfo("Valid from: %s", cert.NotBefore.Format(time.RFC3339))
@@ -95,7 +131,7 @@ func checkCertificate(hostname string, threshold float64) (bool, *x509.Certifica
 		logInfo("Certificate does not need renewal yet (%.2f%% > %.2f%%)", percentRemaining*100, threshold*100)
 	}
 
-	return needsRenewal, cert
+	return needsRenewal, cert, nil
 }
 
 // Check for cached certificate that's still valid
@@ -663,27 +699,53 @@ func stopSSHService(ctx context.Context, serviceSystem *object.HostServiceSystem
 
 // Validate that the new certificate is installed on the ESXi server
 func validateCertificate(hostname string, oldCert *x509.Certificate) bool {
+	validated, err := validateCertificateWithDialer(hostname, oldCert, &DefaultTLSDialer{}, maxCheckDuration, defaultCheckInterval)
+	if err != nil {
+		logWarn("Certificate validation error: %v", err)
+		return false
+	}
+	return validated
+}
+
+// Validate that the new certificate is installed on the ESXi server with custom dialer and timeouts
+func validateCertificateWithDialer(hostname string, oldCert *x509.Certificate, dialer TLSDialer, maxDuration, checkInterval time.Duration) (bool, error) {
 	logInfo("Validating certificate installation on %s", hostname)
 
 	startTime := time.Now()
-	deadline := startTime.Add(maxCheckDuration)
+	deadline := startTime.Add(maxDuration)
+
+	// Parse hostname to extract host and port
+	host, port, err := net.SplitHostPort(hostname)
+	if err != nil {
+		// If no port specified, assume hostname only and add default port
+		host = hostname
+		port = "443"
+	}
 
 	for time.Now().Before(deadline) {
 		// Connect to server and get certificate
-		conn, err := tls.Dial("tcp", hostname+":443", &tls.Config{
+		conn, err := dialer.Dial("tcp", net.JoinHostPort(host, port), &tls.Config{
 			InsecureSkipVerify: true,
 		})
 
 		if err != nil {
 			logWarn("Failed to connect to %s: %v. Retrying in %s...",
-				hostname, err, defaultCheckInterval)
-			time.Sleep(defaultCheckInterval)
+				hostname, err, checkInterval)
+			time.Sleep(checkInterval)
 			continue
 		}
 
 		// Get the new certificate
-		newCert := conn.ConnectionState().PeerCertificates[0]
+		certs := conn.ConnectionState().PeerCertificates
 		conn.Close()
+		
+		if len(certs) == 0 {
+			logWarn("No certificates found for %s. Retrying in %s...", hostname, checkInterval)
+			time.Sleep(checkInterval)
+			continue
+		}
+		
+		newCert := certs[0]
 
 		// Check if the certificate has changed
 		if !newCert.NotAfter.Equal(oldCert.NotAfter) {
@@ -694,14 +756,14 @@ func validateCertificate(hostname string, oldCert *x509.Certificate) bool {
 				logInfo("New certificate detected! Old expiry: %s, New expiry: %s",
 					oldCert.NotAfter.Format(time.RFC3339),
 					newCert.NotAfter.Format(time.RFC3339))
-				return true
+				return true, nil
 			}
 		}
 
-		logDebug("Certificate not updated yet. Checking again in %s...", defaultCheckInterval)
-		time.Sleep(defaultCheckInterval)
+		logDebug("Certificate not updated yet. Checking again in %s...", checkInterval)
+		time.Sleep(checkInterval)
 	}
 
-	logWarn("Validation timeout reached after %s", maxCheckDuration)
-	return false
+	logWarn("Validation timeout reached after %s", maxDuration)
+	return false, nil
 }
