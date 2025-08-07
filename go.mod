@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.18
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.71
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.1
-	github.com/go-acme/lego/v4 v4.25.1
+	github.com/go-acme/lego/v4 v4.25.2
 	github.com/tcnksm/go-latest v0.0.0-20170313132115-e3007ae9052e
 	github.com/vmware/govmomi v0.51.0
 	golang.org/x/crypto v0.40.0
