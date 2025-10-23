@@ -37,3 +37,6 @@ coverage
 # Local development builds
 lab-update-esxi-cert
 lab-update-esxi-cert.exe
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github\instructions\snyk_rules.instructions.md
