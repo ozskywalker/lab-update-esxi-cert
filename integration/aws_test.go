@@ -345,3 +345,112 @@ func TestAWSRegionValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestAWSDefaultCredentialChain tests AWS SDK default credential chain behavior
+func TestAWSDefaultCredentialChain(t *testing.T) {
+	// Create mock STS server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" && r.Method == "POST" {
+			// Mock GetCallerIdentity response
+			response := `<?xml version="1.0" encoding="UTF-8"?>
+<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+    <GetCallerIdentityResult>
+        <Arn>arn:aws:iam::123456789012:user/default-chain-user</Arn>
+        <UserId>AIDACKCEVSQ6C2DEFAULT</UserId>
+        <Account>123456789012</Account>
+    </GetCallerIdentityResult>
+    <ResponseMetadata>
+        <RequestId>01234567-89ab-cdef-0123-456789abcdef</RequestId>
+    </ResponseMetadata>
+</GetCallerIdentityResponse>`
+			w.Header().Set("Content-Type", "text/xml")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(response))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	// Test 1: LoadDefaultConfig without explicit credentials provider (simulates default chain)
+	t.Run("without_explicit_credentials", func(t *testing.T) {
+		// Set environment variables to simulate default credential chain
+		t.Setenv("AWS_ACCESS_KEY_ID", "AKIADEFAULTCHAIN")
+		t.Setenv("AWS_SECRET_ACCESS_KEY", "default-secret-key")
+
+		// Create AWS config WITHOUT WithCredentialsProvider (uses default chain)
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion("us-east-1"),
+			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
+				func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+					return aws.Endpoint{
+						URL:           mockServer.URL,
+						SigningRegion: region,
+					}, nil
+				})),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create AWS config with default chain: %v", err)
+		}
+
+		// Create STS client and test credential validation
+		stsClient := sts.NewFromConfig(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		result, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+		if err != nil {
+			t.Fatalf("Expected successful credential validation with default chain, got error: %v", err)
+		}
+
+		// Verify response
+		if result.Account == nil || *result.Account != "123456789012" {
+			t.Errorf("Expected account 123456789012, got %v", result.Account)
+		}
+		if result.Arn == nil || !strings.Contains(*result.Arn, "default-chain-user") {
+			t.Errorf("Expected ARN to contain 'default-chain-user', got %v", result.Arn)
+		}
+
+		t.Log("Successfully validated credentials using default credential chain simulation")
+	})
+
+	// Test 2: Verify that explicit credentials still work (backward compatibility)
+	t.Run("with_explicit_credentials", func(t *testing.T) {
+		// Create AWS config WITH explicit credentials
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion("us-east-1"),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				"AKIAEXPLICIT123",
+				"explicit-secret-key",
+				"",
+			)),
+			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
+				func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+					return aws.Endpoint{
+						URL:           mockServer.URL,
+						SigningRegion: region,
+					}, nil
+				})),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create AWS config with explicit credentials: %v", err)
+		}
+
+		// Create STS client and test credential validation
+		stsClient := sts.NewFromConfig(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		result, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+		if err != nil {
+			t.Fatalf("Expected successful credential validation with explicit credentials, got error: %v", err)
+		}
+
+		// Verify response
+		if result.Account == nil || *result.Account != "123456789012" {
+			t.Errorf("Expected account 123456789012, got %v", result.Account)
+		}
+
+		t.Log("Successfully validated credentials using explicit credentials (backward compatibility)")
+	})
+}

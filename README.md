@@ -68,13 +68,23 @@ go build
 
 ## Usage
 
-Basic usage to check a certificate without renewing (uses existing env variables from AWS):
+Basic usage to check a certificate without renewing (uses AWS default credential chain):
 
 ```bash
 ./lab-update-esxi-cert --hostname esxi.lab.example.com --dry-run
 ```
 
-Full renewal with permanent AWS credentials:
+Full renewal using AWS default credential chain (from ~/.aws/credentials or IAM role):
+
+```bash
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
+  --domain example.com \
+  --email admin@example.com \
+  --esxi-user root \
+  --esxi-pass password
+```
+
+Full renewal with explicit AWS credentials:
 
 ```bash
 ./lab-update-esxi-cert --hostname esxi.lab.example.com \
@@ -132,8 +142,8 @@ Force certificate renewal regardless of expiration:
 | `--email` | `EMAIL` | Email for Let's Encrypt registration | | Yes (unless dry-run) |
 | `--esxi-user` | `ESXI_USERNAME` | ESXi username | | Yes (unless dry-run) |
 | `--esxi-pass` | `ESXI_PASSWORD` | ESXi password | | Yes (unless dry-run) |
-| `--aws-key-id` | `AWS_ACCESS_KEY_ID` | AWS Access Key ID | | Yes |
-| `--aws-secret-key` | `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key | | Yes |
+| `--aws-key-id` | `AWS_ACCESS_KEY_ID` | AWS Access Key ID (for explicit credentials) | | Conditional* |
+| `--aws-secret-key` | `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key (for explicit credentials) | | Conditional* |
 
 ### Optional config options
 
@@ -173,25 +183,53 @@ Configuration options are chosen based on the following precedence:
 
 ## AWS Credentials and Authentication
 
-The tool supports both permanent and temporary AWS credentials for Route53 DNS validation:
+*Conditional requirement: AWS credentials can be provided either explicitly OR via AWS default credential chain.
 
-### Permanent Credentials
+The tool supports multiple methods for AWS credential authentication for Route53 DNS validation:
+
+### 1. AWS Default Credential Chain (Recommended)
+The simplest approach - omit `--aws-key-id` and `--aws-secret-key` flags to use AWS SDK's default credential chain:
+
+- **Shared credentials file**: `~/.aws/credentials` with named profiles
+- **Shared config file**: `~/.aws/config`
+- **Environment variables**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`
+- **IAM roles**: EC2 instance profiles, ECS task roles, EKS service accounts
+
+**Example using default credential chain:**
+```bash
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
+  --domain example.com \
+  --email admin@example.com \
+  --esxi-user root --esxi-pass password
+```
+
+**To use a specific AWS profile:**
+```bash
+AWS_PROFILE=myprofile ./lab-update-esxi-cert --hostname esxi.lab.example.com \
+  --domain example.com --email admin@example.com
+```
+
+### 2. Explicit Credentials
+Provide credentials directly via command-line flags or environment variables:
+
+**Permanent Credentials:**
 - Standard AWS Access Key ID and Secret Access Key
-- Can be provided via environment variables or command-line flags
+- Both must be provided together if using explicit credentials
 
-### Temporary Credentials (STS Assume Role)
+**Temporary Credentials (STS Assume Role):**
 - Supports AWS Session Tokens for temporary credentials
 - Useful for cross-account access or enhanced security
-- Session tokens are typically obtained through AWS STS assume-role operations
+- Include `--aws-session-token` along with key ID and secret
+
+**Example with explicit credentials:**
+```bash
+./lab-update-esxi-cert --hostname esxi.lab.example.com \
+  --aws-key-id AKIAXXXXXXXX \
+  --aws-secret-key xxxxxxxxxx
+```
 
 ### Credential Validation
-The tool validates AWS credentials at startup using AWS STS GetCallerIdentity before proceeding with certificate operations. This validation occurs for both dry-run and normal execution modes to ensure credentials are valid and have proper permissions.
-
-**Environment Variables:**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_SESSION_TOKEN` (optional, for temporary credentials)
-- `AWS_REGION` (optional, defaults to us-east-1)
+The tool validates AWS credentials at startup using AWS STS GetCallerIdentity before proceeding with certificate operations. This validation occurs for both dry-run and normal execution modes to ensure credentials are valid and have proper permissions. The validation will indicate which credential source is being used (explicit vs. default chain).
 
 ## Certificate Installation Process
 

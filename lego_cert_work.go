@@ -211,18 +211,27 @@ func generateCertificate(config Config) (string, string, error) {
 		return "", "", fmt.Errorf("failed to create ACME client: %v", err)
 	}
 
-	// Set up Route53 provider
-	provider, err := route53.NewDNSProviderConfig(&route53.Config{
+	// Set up Route53 provider configuration
+	route53Config := &route53.Config{
 		MaxRetries:         5,
 		TTL:                60,
 		PropagationTimeout: 2 * time.Minute,
 		PollingInterval:    4 * time.Second,
 		HostedZoneID:       "", // Auto-detect
-		AccessKeyID:        config.Route53KeyID,
-		SecretAccessKey:    config.Route53SecretKey,
-		SessionToken:       config.Route53SessionToken,
 		Region:             config.Route53Region,
-	})
+	}
+
+	// Only set explicit credentials if provided; otherwise lego will use AWS SDK default credential chain
+	if config.Route53KeyID != "" {
+		logDebug("Configuring Route53 provider with explicit AWS credentials")
+		route53Config.AccessKeyID = config.Route53KeyID
+		route53Config.SecretAccessKey = config.Route53SecretKey
+		route53Config.SessionToken = config.Route53SessionToken
+	} else {
+		logInfo("Configuring Route53 provider to use AWS default credential chain")
+	}
+
+	provider, err := route53.NewDNSProviderConfig(route53Config)
 
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize Route53 provider: %v", err)

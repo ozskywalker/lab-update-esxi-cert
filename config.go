@@ -291,9 +291,18 @@ func (cm *ConfigManager) ValidateConfig(config Config) error {
 		return fmt.Errorf("hostname is required")
 	}
 
-	// AWS credentials are required for both dry-run and normal execution
-	if config.Route53KeyID == "" || config.Route53SecretKey == "" {
-		return fmt.Errorf("AWS credentials for Route53 are required")
+	// AWS credentials validation - can use either explicit credentials OR default credential chain
+	// If one is provided, both key ID and secret must be provided
+	if (config.Route53KeyID != "" && config.Route53SecretKey == "") ||
+		(config.Route53KeyID == "" && config.Route53SecretKey != "") {
+		return fmt.Errorf("both AWS Access Key ID and Secret Access Key must be provided together, or omit both to use AWS default credential chain")
+	}
+
+	// Log credential source for debugging
+	if config.Route53KeyID != "" {
+		logDebug("Using explicit AWS credentials (Access Key ID provided)")
+	} else {
+		logDebug("Using AWS default credential chain (no explicit credentials provided)")
 	}
 
 	// Validate flag combinations

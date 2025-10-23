@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -138,30 +139,60 @@ func setupLogging(logFile, logLevel string) {
 func validateAWSCredentials(config Config) error {
 	logDebug("Validating AWS credentials...")
 
-	// Create a simple AWS session to test credentials
-	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
-		awsConfig.WithRegion(config.Route53Region),
-		awsConfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			config.Route53KeyID,
-			config.Route53SecretKey,
-			config.Route53SessionToken,
-		)),
-	)
+	var awsCfg aws.Config
+	var err error
+
+	// Check if explicit credentials are provided
+	if config.Route53KeyID != "" {
+		// Use explicit static credentials
+		logDebug("Using explicit AWS credentials (Access Key ID: %s)", config.Route53KeyID[:min(8, len(config.Route53KeyID))]+"...")
+		awsCfg, err = awsConfig.LoadDefaultConfig(context.TODO(),
+			awsConfig.WithRegion(config.Route53Region),
+			awsConfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				config.Route53KeyID,
+				config.Route53SecretKey,
+				config.Route53SessionToken,
+			)),
+		)
+	} else {
+		// Use AWS default credential chain (profiles, IAM roles, env vars, etc.)
+		logInfo("Using AWS default credential chain (checking ~/.aws/credentials, IAM roles, environment variables, etc.)")
+		awsCfg, err = awsConfig.LoadDefaultConfig(context.TODO(),
+			awsConfig.WithRegion(config.Route53Region),
+		)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create AWS config: %v", err)
 	}
 
 	// Create STS client to test credentials
-	stsClient := sts.NewFromConfig(cfg)
+	stsClient := sts.NewFromConfig(awsCfg)
 
 	// Call GetCallerIdentity to validate credentials
-	_, err = stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
+	result, err := stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
 	if err != nil {
+		if config.Route53KeyID == "" {
+			return fmt.Errorf("AWS credential validation failed using default credential chain: %v\nTip: Ensure AWS credentials are configured via ~/.aws/credentials, environment variables, or IAM role", err)
+		}
 		return fmt.Errorf("AWS credential validation failed: %v", err)
 	}
 
-	logDebug("AWS credentials validated successfully")
+	// Log credential identity information for debugging
+	if result.Arn != nil {
+		logDebug("AWS credentials validated successfully - Identity: %s", *result.Arn)
+	} else {
+		logDebug("AWS credentials validated successfully")
+	}
 	return nil
+}
+
+// Helper function for min of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetDefaultDependencies returns the default dependencies for production use

@@ -79,21 +79,33 @@ Default threshold is 0.33 (33% remaining lifetime), meaning a 90-day Let's Encry
 
 ## AWS Credentials and Environment Variables
 
-The application requires AWS credentials for Route53 DNS validation and validates them on startup for both dry-run and normal execution.
+The application supports multiple methods for AWS credential authentication for Route53 DNS validation. Credentials are validated on startup using AWS STS GetCallerIdentity for both dry-run and normal execution.
+
+### AWS Credential Options
+
+**1. AWS Default Credential Chain (Recommended)**:
+- Omit `-aws-key-id` and `-aws-secret-key` to use AWS SDK's default credential chain
+- Automatically checks: `~/.aws/credentials`, `~/.aws/config`, environment variables, IAM roles
+- Use `AWS_PROFILE` environment variable to select a specific profile
+
+**2. Explicit Credentials**:
+- Provide both `-aws-key-id` and `-aws-secret-key` (both required if using explicit credentials)
+- Optional `-aws-session-token` for temporary credentials (STS assume role)
 
 **Configuration Sources** (in order of precedence, highest to lowest):
 
 **Command-line flags** (highest precedence):
 - `-config`: Path to JSON configuration file
 - `-hostname`, `-domain`, `-email`: Core certificate settings
-- `-aws-key-id`, `-aws-secret-key`, `-aws-session-token`, `-aws-region`: AWS credentials
+- `-aws-key-id`, `-aws-secret-key`, `-aws-session-token`, `-aws-region`: AWS credentials (optional - uses default chain if omitted)
 - `-esxi-user`, `-esxi-pass`: ESXi credentials
 - `-log`, `-log-level`: Logging configuration
 - `-threshold`, `-key-size`: Certificate renewal settings
 - `-dry-run`, `-force`: Operational modes
 
 **Environment Variables**:
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`: AWS credentials
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`: AWS credentials (optional)
+- `AWS_PROFILE`: AWS credential profile to use (when using default credential chain)
 - `ESXI_HOSTNAME`, `AWS_ROUTE53_DOMAIN`, `EMAIL`: Core settings
 - `ESXI_USERNAME`, `ESXI_PASSWORD`: ESXi credentials
 - `LOG_FILE`, `LOG_LEVEL`: Logging configuration
@@ -105,4 +117,4 @@ The application requires AWS credentials for Route53 DNS validation and validate
 - Specified via `-config` flag
 - Example: `{"hostname": "esxi01.lab.example.com", "domain": "lab.example.com", "log_level": "INFO"}`
 
-**Credential Validation**: Uses AWS STS GetCallerIdentity to validate credentials before proceeding with certificate operations.
+**Credential Validation**: Uses AWS STS GetCallerIdentity to validate credentials before proceeding with certificate operations. Logs indicate whether using explicit credentials or default credential chain.
