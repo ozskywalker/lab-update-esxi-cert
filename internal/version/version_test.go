@@ -241,7 +241,7 @@ func TestCheckForUpdates_WithMockServer(t *testing.T) {
 		}
 
 		// Test boolean field
-		var isUpToDate bool = updateInfo.IsUpToDate
+		isUpToDate := updateInfo.IsUpToDate
 		if isUpToDate {
 			t.Error("Expected IsUpToDate to be false for this test case")
 		}
@@ -350,8 +350,7 @@ func TestQuietlyCheckForUpdates(t *testing.T) {
 		// and log debug message (which we can't easily capture)
 
 		// Test that the function signature is correct
-		var updateAvailable bool
-		updateAvailable = QuietlyCheckForUpdates()
+		updateAvailable := QuietlyCheckForUpdates()
 
 		// Should return a boolean value
 		if updateAvailable != true && updateAvailable != false {
