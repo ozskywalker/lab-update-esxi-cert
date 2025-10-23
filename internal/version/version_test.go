@@ -263,8 +263,8 @@ func TestGetUpdateNotification(t *testing.T) {
 		if result != "" {
 			// If not empty, should contain update information
 			if !strings.Contains(result, "Update available") &&
-			   !strings.Contains(result, "→") &&
-			   !strings.Contains(result, "Download") {
+				!strings.Contains(result, "→") &&
+				!strings.Contains(result, "Download") {
 				t.Errorf("If notification is not empty, it should contain update info, got: %s", result)
 			}
 		}

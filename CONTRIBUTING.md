@@ -61,12 +61,33 @@ BREAKING CHANGE: Default renewal threshold changed from 0.33 to 0.25
 ## Development Workflow
 
 1. **Fork the repository** and create a feature branch
-2. **Make your changes** following the code style
-3. **Test your changes** using `go test ./...`
-4. **Format your code** using `go fmt ./...`
-5. **Vet your code** using `go vet ./...`
-6. **Commit your changes** using conventional commit format
-7. **Push to your fork** and create a pull request
+2. **Set up pre-commit hooks** (see section below - recommended)
+3. **Make your changes** following the code style
+4. **Test your changes** using `go test ./...`
+5. **Format your code** using `go fmt ./...`
+6. **Vet your code** using `go vet ./...`
+7. **Commit your changes** using conventional commit format
+8. **Push to your fork** and create a pull request
+
+## Pre-commit Hooks
+
+This repository includes a pre-commit hook that automatically checks your code before each commit. The hook runs:
+
+- **`gofmt -s -l .`** - Ensures code is properly formatted
+- **`go vet ./...`** - Checks for common Go mistakes
+- **`go test -short ./...`** - Runs quick tests
+
+### One-time Setup
+
+To enable the pre-commit hooks, run this command once after cloning:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Why Use Hooks?
+
+The pre-commit hook catches formatting and basic issues before they reach CI, preventing build failures and saving review time. If you prefer not to use hooks, make sure to manually run the checks in the Development Workflow above before committing.
 
 ## Code Guidelines
 

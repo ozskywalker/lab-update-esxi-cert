@@ -9,6 +9,9 @@ This is a Golang utility for automating SSL certificate renewals for VMware ESXi
 ## Build and Development Commands
 
 ```bash
+# Enable pre-commit hooks (one-time setup - see CONTRIBUTING.md for details)
+git config core.hooksPath .githooks
+
 # Build the application
 go build
 
@@ -36,6 +39,8 @@ go mod tidy
 # Clean build artifacts
 go clean
 ```
+
+**Note**: This project includes pre-commit hooks in `.githooks/` that automatically check formatting, run vet, and test before commits. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 
 ## Architecture
 
