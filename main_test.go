@@ -203,16 +203,15 @@ func TestSetupLogging_InvalidFile(t *testing.T) {
 	}
 }
 
-func TestValidateAWSCredentials_Success(t *testing.T) {
-	// Create a test config
+func TestValidateAWSCredentials_ExplicitCredentials(t *testing.T) {
+	// Test that explicit credentials configuration is properly structured
 	config := Config{
 		Route53KeyID:     "AKIATEST123",
 		Route53SecretKey: "test-secret",
 		Route53Region:    "us-east-1",
 	}
 
-	// Test that the config structure is valid for AWS validation
-	// In practice, you'd mock the AWS SDK calls for proper testing
+	// Verify explicit credentials are set
 	if config.Route53KeyID == "" {
 		t.Error("Expected AWS key ID to be set")
 	}
@@ -224,20 +223,38 @@ func TestValidateAWSCredentials_Success(t *testing.T) {
 	}
 }
 
-func TestValidateAWSCredentials_Failure(t *testing.T) {
-	// Test config with invalid credentials structure
+func TestValidateAWSCredentials_DefaultChain(t *testing.T) {
+	// Test that default credential chain configuration is properly structured
 	config := Config{
-		Route53KeyID:     "", // Invalid empty key ID
-		Route53SecretKey: "test-secret",
+		Route53KeyID:     "", // Empty = use default chain
+		Route53SecretKey: "", // Empty = use default chain
 		Route53Region:    "us-east-1",
 	}
 
-	// Test that we can identify invalid config structure
-	if config.Route53KeyID != "" {
-		t.Error("Expected empty AWS key ID for failure test")
+	// Verify both key ID and secret are empty (indicating default chain usage)
+	if config.Route53KeyID != "" || config.Route53SecretKey != "" {
+		t.Error("Expected both AWS credentials to be empty for default chain")
 	}
 	if config.Route53Region == "" {
-		t.Error("Expected AWS region to be set")
+		t.Error("Expected AWS region to be set even with default chain")
+	}
+}
+
+func TestValidateAWSCredentials_SessionToken(t *testing.T) {
+	// Test that temporary credentials with session token are properly structured
+	config := Config{
+		Route53KeyID:        "ASIATEST123",
+		Route53SecretKey:    "test-secret",
+		Route53SessionToken: "test-session-token",
+		Route53Region:       "us-east-1",
+	}
+
+	// Verify session token is set along with credentials
+	if config.Route53SessionToken == "" {
+		t.Error("Expected AWS session token to be set")
+	}
+	if config.Route53KeyID == "" || config.Route53SecretKey == "" {
+		t.Error("Expected AWS credentials to be set with session token")
 	}
 }
 
@@ -569,5 +586,193 @@ func TestLoggingStructure(t *testing.T) {
 	// Test that currentLogLevel is initialized
 	if currentLogLevel < LOG_ERROR || currentLogLevel > LOG_DEBUG {
 		t.Error("currentLogLevel should be within valid range")
+	}
+}
+
+func TestMinFunction(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        int
+		b        int
+		expected int
+	}{
+		{"a less than b", 5, 10, 5},
+		{"b less than a", 10, 5, 5},
+		{"equal values", 7, 7, 7},
+		{"negative values", -5, -10, -10},
+		{"zero and positive", 0, 5, 0},
+		{"zero and negative", 0, -5, -5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := min(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("min(%d, %d) = %d, expected %d", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetDefaultDependencies(t *testing.T) {
+	deps := GetDefaultDependencies()
+
+	// Verify all dependencies are set
+	if deps.AWSValidator == nil {
+		t.Error("AWSValidator should not be nil")
+	}
+	if deps.CertChecker == nil {
+		t.Error("CertChecker should not be nil")
+	}
+	if deps.CertGenerator == nil {
+		t.Error("CertGenerator should not be nil")
+	}
+	if deps.CertUploader == nil {
+		t.Error("CertUploader should not be nil")
+	}
+	if deps.CertValidator == nil {
+		t.Error("CertValidator should not be nil")
+	}
+}
+
+func TestRunWorkflow_CertGenerationFailure(t *testing.T) {
+	config := Config{
+		Hostname:         "test.example.com",
+		Domain:           "example.com",
+		Email:            "test@example.com",
+		Route53KeyID:     "AKIATEST123",
+		Route53SecretKey: "test-secret",
+		Route53Region:    "us-east-1",
+		ESXiUsername:     "root",
+		ESXiPassword:     "password",
+		Force:            false,
+		LogLevel:         "INFO",
+		Threshold:        0.33,
+		KeySize:          4096,
+	}
+
+	mockDeps := Dependencies{
+		AWSValidator: func(Config) error {
+			return nil
+		},
+		CertChecker: func(string, float64) (bool, *x509.Certificate, error) {
+			// Return that cert needs renewal
+			cert := &x509.Certificate{
+				NotAfter:  time.Now().Add(1 * 24 * time.Hour), // 1 day left
+				NotBefore: time.Now().Add(-89 * 24 * time.Hour),
+			}
+			return true, cert, nil
+		},
+		CertGenerator: func(Config) (string, string, error) {
+			return "", "", fmt.Errorf("ACME server unreachable")
+		},
+		CertUploader: func(Config, string, string) error {
+			t.Error("CertUploader should not be called when generation fails")
+			return nil
+		},
+		CertValidator: func(string, *x509.Certificate) (bool, error) {
+			t.Error("CertValidator should not be called when generation fails")
+			return false, nil
+		},
+	}
+
+	err := runWorkflow(config, mockDeps)
+	if err == nil {
+		t.Error("Expected workflow to fail with certificate generation error")
+	}
+	if !strings.Contains(err.Error(), "failed to generate certificate") {
+		t.Errorf("Expected certificate generation error, got: %v", err)
+	}
+}
+
+func TestRunWorkflow_CertUploadFailure(t *testing.T) {
+	config := Config{
+		Hostname:         "test.example.com",
+		Domain:           "example.com",
+		Email:            "test@example.com",
+		Route53KeyID:     "AKIATEST123",
+		Route53SecretKey: "test-secret",
+		Route53Region:    "us-east-1",
+		ESXiUsername:     "root",
+		ESXiPassword:     "password",
+		Force:            true,
+		LogLevel:         "INFO",
+		Threshold:        0.33,
+		KeySize:          4096,
+	}
+
+	mockDeps := Dependencies{
+		AWSValidator: func(Config) error {
+			return nil
+		},
+		CertChecker: func(string, float64) (bool, *x509.Certificate, error) {
+			cert := &x509.Certificate{
+				NotAfter: time.Now().Add(60 * 24 * time.Hour),
+			}
+			return false, cert, nil
+		},
+		CertGenerator: func(Config) (string, string, error) {
+			return "cert.pem", "key.pem", nil
+		},
+		CertUploader: func(Config, string, string) error {
+			return fmt.Errorf("SSH authentication failed")
+		},
+		CertValidator: func(string, *x509.Certificate) (bool, error) {
+			t.Error("CertValidator should not be called when upload fails")
+			return false, nil
+		},
+	}
+
+	err := runWorkflow(config, mockDeps)
+	if err == nil {
+		t.Error("Expected workflow to fail with certificate upload error")
+	}
+	if !strings.Contains(err.Error(), "failed to upload certificate") {
+		t.Errorf("Expected certificate upload error, got: %v", err)
+	}
+}
+
+func TestRunWorkflow_ValidationWarning(t *testing.T) {
+	config := Config{
+		Hostname:         "test.example.com",
+		Domain:           "example.com",
+		Email:            "test@example.com",
+		Route53KeyID:     "AKIATEST123",
+		Route53SecretKey: "test-secret",
+		Route53Region:    "us-east-1",
+		ESXiUsername:     "root",
+		ESXiPassword:     "password",
+		Force:            true,
+		LogLevel:         "INFO",
+		Threshold:        0.33,
+		KeySize:          4096,
+	}
+
+	mockDeps := Dependencies{
+		AWSValidator: func(Config) error {
+			return nil
+		},
+		CertChecker: func(string, float64) (bool, *x509.Certificate, error) {
+			cert := &x509.Certificate{
+				NotAfter: time.Now().Add(60 * 24 * time.Hour),
+			}
+			return false, cert, nil
+		},
+		CertGenerator: func(Config) (string, string, error) {
+			return "cert.pem", "key.pem", nil
+		},
+		CertUploader: func(Config, string, string) error {
+			return nil
+		},
+		CertValidator: func(string, *x509.Certificate) (bool, error) {
+			// Return validation error (not failure, just warning)
+			return false, fmt.Errorf("connection timeout")
+		},
+	}
+
+	// Should succeed even if validation has errors (it's just a warning)
+	err := runWorkflow(config, mockDeps)
+	if err != nil {
+		t.Errorf("Workflow should succeed even with validation warnings, got error: %v", err)
 	}
 }

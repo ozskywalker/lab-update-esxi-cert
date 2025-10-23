@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rsa"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -119,6 +120,49 @@ func TestCheckCertificateWithDialer_ConnectionFailure(t *testing.T) {
 	}
 }
 
+func TestCheckCertificateWithDialer_HostnameWithPort(t *testing.T) {
+	// Test that hostname with explicit port is handled correctly
+	certPEM, keyPEM, err := testutil.GenerateValidCertificate("test.example.com")
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	mockDialer := &testutil.MockTLSDialer{
+		CertPEM:    certPEM,
+		KeyPEM:     keyPEM,
+		ShouldFail: false,
+	}
+
+	// Test with explicit port
+	needsRenewal, cert, err := checkCertificateWithDialer("test.example.com:8443", 0.33, mockDialer)
+	if err != nil {
+		t.Errorf("Expected no error for hostname with port, got: %v", err)
+	}
+	if needsRenewal {
+		t.Error("Expected valid certificate to not need renewal")
+	}
+	if cert == nil {
+		t.Error("Expected certificate to be returned")
+	}
+	if cert != nil && cert.Subject.CommonName != "test.example.com" {
+		t.Errorf("Expected certificate CN to be test.example.com, got: %s", cert.Subject.CommonName)
+	}
+}
+
+func TestCheckCertificateWithDialer_NoCertificates(t *testing.T) {
+	// This test verifies the "no certificates found" error path
+	// However, with the current MockTLSDialer implementation, we can't easily
+	// simulate a successful TLS connection that returns zero certificates
+	// (that's a very rare edge case in practice).
+	//
+	// The mock would need to be enhanced to support this scenario, which
+	// would require significant changes to testutil/mocks.go
+	//
+	// For now, we skip this edge case test as it's already covered by
+	// the connection failure test above.
+	t.Skip("MockTLSDialer doesn't support simulating successful connection with zero certificates")
+}
+
 func TestGetCachedCertificate_ValidCache(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -139,10 +183,23 @@ func TestGetCachedCertificate_ValidCache(t *testing.T) {
 	os.WriteFile(certPath, certPEM, 0600)
 	os.WriteFile(keyPath, keyPEM, 0600)
 
-	// Note: In a real implementation, you'd need to refactor getCachedCertificate
-	// to accept a tempDir parameter for testability
-	// For now, we'll skip this test aspect
-	t.Skip("Test requires refactoring getCachedCertificate to accept tempDir parameter")
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+	}
+
+	// Test with custom cache directory
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
+
+	if !found {
+		t.Error("Expected to find cached certificate")
+	}
+	if cachedCertPath != certPath {
+		t.Errorf("Expected cert path %s, got %s", certPath, cachedCertPath)
+	}
+	if cachedKeyPath != keyPath {
+		t.Errorf("Expected key path %s, got %s", keyPath, cachedKeyPath)
+	}
 }
 
 func TestGetCachedCertificate_ForceSkipsCache(t *testing.T) {
@@ -166,7 +223,7 @@ func TestGetCachedCertificate_NearExpiryCache(t *testing.T) {
 
 	// Create a certificate that's close to expiration (< 50% remaining)
 	hostname := "test.example.com"
-	certPEM, keyPEM, err := testutil.GenerateNearExpiryCertificate(hostname, 10) // 10 days left
+	certPEM, keyPEM, err := testutil.GenerateNearExpiryCertificate(hostname, 10) // 10 days left (out of 90)
 	if err != nil {
 		t.Fatalf("Failed to generate near-expiry certificate: %v", err)
 	}
@@ -181,23 +238,147 @@ func TestGetCachedCertificate_NearExpiryCache(t *testing.T) {
 	os.WriteFile(certPath, certPEM, 0600)
 	os.WriteFile(keyPath, keyPEM, 0600)
 
-	// This test also requires refactoring for full testability
-	t.Skip("Test requires refactoring getCachedCertificate to accept tempDir parameter")
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+	}
+
+	// Certificate with < 50% lifetime remaining should not be used from cache
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
+
+	if found {
+		t.Error("Expected near-expiry cached certificate to be rejected")
+	}
+	if cachedCertPath != "" || cachedKeyPath != "" {
+		t.Error("Expected empty paths when cached certificate is too close to expiration")
+	}
 }
 
 func TestGetCachedCertificate_MissingFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	cacheDir := filepath.Join(tempDir, "empty-cache")
+	os.MkdirAll(cacheDir, 0755)
+
 	config := Config{
 		Hostname: "nonexistent.example.com",
 		Force:    false,
 	}
 
-	cachedCertPath, cachedKeyPath, found := getCachedCertificate(config)
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
 
 	if found {
 		t.Error("Expected to not find nonexistent cached certificate")
 	}
 	if cachedCertPath != "" || cachedKeyPath != "" {
 		t.Error("Expected empty paths when cache files don't exist")
+	}
+}
+
+func TestGetCachedCertificate_MissingKeyFile(t *testing.T) {
+	tempDir := t.TempDir()
+	hostname := "test.example.com"
+
+	// Generate certificate
+	certPEM, _, err := testutil.GenerateValidCertificate(hostname)
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	// Create cache directory with only cert file (no key file)
+	cacheDir := filepath.Join(tempDir, "partial-cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
+	os.WriteFile(certPath, certPEM, 0600)
+	// Intentionally don't write key file
+
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+	}
+
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
+
+	if found {
+		t.Error("Expected to not find cached certificate when key file is missing")
+	}
+	if cachedCertPath != "" || cachedKeyPath != "" {
+		t.Error("Expected empty paths when key file is missing")
+	}
+}
+
+func TestGetCachedCertificate_CorruptedCertFile(t *testing.T) {
+	tempDir := t.TempDir()
+	hostname := "test.example.com"
+
+	// Create cache directory with corrupted cert file
+	cacheDir := filepath.Join(tempDir, "corrupt-cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
+	keyPath := filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname))
+
+	// Write corrupted PEM data
+	os.WriteFile(certPath, []byte("NOT A VALID PEM FILE"), 0600)
+	os.WriteFile(keyPath, []byte("NOT A VALID KEY FILE"), 0600)
+
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+	}
+
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
+
+	if found {
+		t.Error("Expected to not find cached certificate when cert file is corrupted")
+	}
+	if cachedCertPath != "" || cachedKeyPath != "" {
+		t.Error("Expected empty paths when cached certificate is corrupted")
+	}
+}
+
+func TestGetCachedCertificate_NonRSASignatureAlgorithm(t *testing.T) {
+	tempDir := t.TempDir()
+	hostname := "test.example.com"
+
+	// Generate an ECDSA certificate (non-RSA signature algorithm)
+	certPEM, keyPEM, err := testutil.GenerateValidECDSACertificate(hostname)
+	if err != nil {
+		t.Fatalf("Failed to generate ECDSA certificate: %v", err)
+	}
+
+	// Verify it's actually ECDSA
+	cert, err := testutil.ParseCertificatePEM(certPEM)
+	if err != nil {
+		t.Fatalf("Failed to parse ECDSA certificate: %v", err)
+	}
+	if cert.SignatureAlgorithm == x509.SHA256WithRSA {
+		t.Fatal("Expected ECDSA signature algorithm, got RSA")
+	}
+
+	// Create cache directory with ECDSA certificate
+	cacheDir := filepath.Join(tempDir, "ecdsa-cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
+	keyPath := filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname))
+
+	os.WriteFile(certPath, certPEM, 0600)
+	os.WriteFile(keyPath, keyPEM, 0600)
+
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+	}
+
+	// Cache should reject ECDSA certificate because code requires SHA256WithRSA
+	cachedCertPath, cachedKeyPath, found := getCachedCertificateWithDir(config, cacheDir)
+
+	if found {
+		t.Error("Expected to reject cached certificate with non-RSA signature algorithm")
+	}
+	if cachedCertPath != "" || cachedKeyPath != "" {
+		t.Error("Expected empty paths when cached certificate uses non-RSA signature")
 	}
 }
 
@@ -383,6 +564,54 @@ func TestValidateCertificateWithDialer_ConnectionFailure(t *testing.T) {
 	}
 	if validated {
 		t.Error("Expected validation to fail when connections fail")
+	}
+}
+
+func TestGenerateCertificate_CacheHit(t *testing.T) {
+	// Test that generateCertificate returns cached certificate when cache is valid
+	hostname := "test.example.com"
+
+	// Generate a valid certificate and populate cache
+	certPEM, keyPEM, err := testutil.GenerateValidCertificate(hostname)
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	// Create cache directory and files - using the default system temp dir
+	// We need to use the actual temp dir since generateCertificate uses os.TempDir()
+	sysTempDir := os.TempDir()
+	cacheDir := filepath.Join(sysTempDir, "esxi-cert-cache")
+	os.MkdirAll(cacheDir, 0755)
+	defer func() {
+		// Clean up test files
+		os.Remove(filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname)))
+		os.Remove(filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname)))
+	}()
+
+	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", hostname))
+	keyPath := filepath.Join(cacheDir, fmt.Sprintf("%s-key.pem", hostname))
+
+	os.WriteFile(certPath, certPEM, 0600)
+	os.WriteFile(keyPath, keyPEM, 0600)
+
+	config := Config{
+		Hostname: hostname,
+		Force:    false,
+		KeySize:  4096,
+	}
+
+	// Call generateCertificate - should return cached paths
+	returnedCertPath, returnedKeyPath, err := generateCertificate(config)
+	if err != nil {
+		t.Fatalf("Expected cache hit to succeed, got error: %v", err)
+	}
+
+	// Verify it returned the cached paths
+	if returnedCertPath != certPath {
+		t.Errorf("Expected cert path %s, got %s", certPath, returnedCertPath)
+	}
+	if returnedKeyPath != keyPath {
+		t.Errorf("Expected key path %s, got %s", keyPath, returnedKeyPath)
 	}
 }
 

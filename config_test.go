@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lab-update-esxi-cert/testutil"
@@ -471,4 +474,266 @@ func buildConfigFromMap(configMap map[string]interface{}) Config {
 	}
 
 	return config
+}
+
+func TestConfigManager_GettersWithMissingKeys(t *testing.T) {
+	cm := NewConfigManager()
+
+	// Test GetString with missing key
+	if str := cm.GetString("nonexistent"); str != "" {
+		t.Errorf("Expected empty string for missing key, got %s", str)
+	}
+
+	// Test GetBool with missing key
+	if b := cm.GetBool("nonexistent"); b != false {
+		t.Errorf("Expected false for missing key, got %v", b)
+	}
+
+	// Test GetFloat64 with missing key
+	if f := cm.GetFloat64("nonexistent"); f != 0.0 {
+		t.Errorf("Expected 0.0 for missing key, got %f", f)
+	}
+
+	// Test GetInt with missing key
+	if i := cm.GetInt("nonexistent"); i != 0 {
+		t.Errorf("Expected 0 for missing key, got %d", i)
+	}
+
+	// Test GetSource with missing key
+	if source := cm.GetSource("nonexistent"); source != ConfigSourceDefault {
+		t.Errorf("Expected ConfigSourceDefault for missing key, got %s", source)
+	}
+}
+
+func TestConfigManager_GettersWithWrongType(t *testing.T) {
+	cm := NewConfigManager()
+
+	// Set a string value
+	cm.Set("test_key", "string_value", ConfigSourceDefault)
+
+	// Try to get it as different types - should return zero values
+	if b := cm.GetBool("test_key"); b != false {
+		t.Errorf("Expected false when getting string as bool, got %v", b)
+	}
+
+	if f := cm.GetFloat64("test_key"); f != 0.0 {
+		t.Errorf("Expected 0.0 when getting string as float64, got %f", f)
+	}
+
+	if i := cm.GetInt("test_key"); i != 0 {
+		t.Errorf("Expected 0 when getting string as int, got %d", i)
+	}
+}
+
+func TestConfigManager_BuildConfig_DefaultLogFile(t *testing.T) {
+	cm := NewConfigManager()
+	cm.LoadDefaults()
+
+	// Set required fields but leave log_file empty
+	cm.Set("hostname", "test.example.com", ConfigSourceFlag)
+
+	config := cm.BuildConfig()
+
+	// LogFile should be set to default (executable name + .log)
+	if config.LogFile == "" {
+		t.Error("Expected LogFile to have a default value")
+	}
+
+	// Check that it ends with .log
+	if !strings.Contains(config.LogFile, ".log") {
+		t.Errorf("Expected LogFile to end with .log, got %s", config.LogFile)
+	}
+}
+
+func TestConfigManager_ValidateConfig_EdgeCases(t *testing.T) {
+	cm := NewConfigManager()
+
+	tests := []struct {
+		name        string
+		modifier    func(*Config)
+		shouldError bool
+		errorPart   string
+	}{
+		{
+			name: "threshold at lower boundary",
+			modifier: func(c *Config) {
+				c.Threshold = 0.01 // Just above 0
+			},
+			shouldError: false,
+		},
+		{
+			name: "threshold at upper boundary",
+			modifier: func(c *Config) {
+				c.Threshold = 0.99 // Just below 1
+			},
+			shouldError: false,
+		},
+		{
+			name: "threshold exactly 0",
+			modifier: func(c *Config) {
+				c.Threshold = 0.0
+			},
+			shouldError: true,
+			errorPart:   "threshold",
+		},
+		{
+			name: "threshold exactly 1",
+			modifier: func(c *Config) {
+				c.Threshold = 1.0
+			},
+			shouldError: true,
+			errorPart:   "threshold",
+		},
+		{
+			name: "log level case insensitive - lowercase",
+			modifier: func(c *Config) {
+				c.LogLevel = "debug"
+			},
+			shouldError: false,
+		},
+		{
+			name: "log level case insensitive - mixed case",
+			modifier: func(c *Config) {
+				c.LogLevel = "WaRn"
+			},
+			shouldError: false,
+		},
+		{
+			name: "AWS key ID provided without secret",
+			modifier: func(c *Config) {
+				c.Route53KeyID = "AKIATEST123"
+				c.Route53SecretKey = ""
+			},
+			shouldError: true,
+			errorPart:   "both AWS Access Key ID and Secret Access Key",
+		},
+		{
+			name: "AWS secret provided without key ID",
+			modifier: func(c *Config) {
+				c.Route53KeyID = ""
+				c.Route53SecretKey = "secret"
+			},
+			shouldError: true,
+			errorPart:   "both AWS Access Key ID and Secret Access Key",
+		},
+		{
+			name: "both AWS credentials empty (should use default chain)",
+			modifier: func(c *Config) {
+				c.Route53KeyID = ""
+				c.Route53SecretKey = ""
+			},
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Start with a valid config
+			config := Config{
+				Hostname:         "test.example.com",
+				Domain:           "example.com",
+				Email:            "test@example.com",
+				Threshold:        0.33,
+				LogLevel:         "INFO",
+				Route53KeyID:     "AKIATEST123",
+				Route53SecretKey: "secret",
+				Route53Region:    "us-east-1",
+				KeySize:          4096,
+				ESXiUsername:     "root",
+				ESXiPassword:     "password",
+			}
+
+			// Apply the modifier
+			tt.modifier(&config)
+
+			err := cm.ValidateConfig(config)
+
+			if tt.shouldError && err == nil {
+				t.Errorf("Expected validation error for %s", tt.name)
+			}
+			if !tt.shouldError && err != nil {
+				t.Errorf("Expected validation to pass for %s, got error: %v", tt.name, err)
+			}
+			if tt.shouldError && err != nil && !strings.Contains(err.Error(), tt.errorPart) {
+				t.Errorf("Expected error to contain '%s', got: %v", tt.errorPart, err)
+			}
+		})
+	}
+}
+
+func TestConfigManager_PrintConfigSources(t *testing.T) {
+	// Capture log output
+	var buf bytes.Buffer
+	originalOutput := log.Writer()
+	log.SetOutput(&buf)
+	defer func() {
+		log.SetOutput(originalOutput)
+	}()
+
+	// Set currentLogLevel to DEBUG to capture debug output
+	originalLogLevel := currentLogLevel
+	currentLogLevel = LOG_DEBUG
+	defer func() {
+		currentLogLevel = originalLogLevel
+	}()
+
+	cm := NewConfigManager()
+	cm.Set("test_key1", "value1", ConfigSourceFlag)
+	cm.Set("test_key2", 42, ConfigSourceEnvVar)
+	cm.Set("test_key3", true, ConfigSourceConfigFile)
+
+	cm.PrintConfigSources()
+
+	output := buf.String()
+
+	// Verify output contains expected information
+	if !strings.Contains(output, "Configuration sources:") {
+		t.Error("Expected output to contain 'Configuration sources:'")
+	}
+	if !strings.Contains(output, "test_key1") {
+		t.Error("Expected output to contain test_key1")
+	}
+	if !strings.Contains(output, "command_line") {
+		t.Error("Expected output to contain command_line source")
+	}
+}
+
+func TestConfigManager_LoadConfigFile_JSONEdgeCases(t *testing.T) {
+	t.Run("config file with all zero values", func(t *testing.T) {
+		cm := NewConfigManager()
+		cm.LoadDefaults()
+
+		// Create a config file with explicit zero values
+		tempDir := t.TempDir()
+		configFile := filepath.Join(tempDir, "zero-values.json")
+
+		configData := map[string]interface{}{
+			"threshold": 0.0,   // Should NOT be loaded (zero value)
+			"key_size":  0,     // Should NOT be loaded (zero value)
+			"hostname":  "",    // Should NOT be loaded (empty string)
+			"dry_run":   false, // Should be loaded (explicit boolean)
+			"force":     false, // Should be loaded (explicit boolean)
+		}
+
+		data, _ := json.Marshal(configData)
+		os.WriteFile(configFile, data, 0644)
+
+		err := cm.LoadConfigFile(configFile)
+		if err != nil {
+			t.Fatalf("Failed to load config file: %v", err)
+		}
+
+		// Zero values should not override defaults (except booleans)
+		if cm.GetFloat64("threshold") != defaultThreshold {
+			t.Errorf("Expected default threshold, got %f", cm.GetFloat64("threshold"))
+		}
+		if cm.GetInt("key_size") != 4096 {
+			t.Errorf("Expected default key size, got %d", cm.GetInt("key_size"))
+		}
+
+		// Booleans should be loaded even if false
+		if source := cm.GetSource("dry_run"); source != ConfigSourceConfigFile {
+			t.Errorf("Expected dry_run to be loaded from config file, got source %s", source)
+		}
+	})
 }

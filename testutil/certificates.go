@@ -1,6 +1,8 @@
 package testutil
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -108,4 +110,66 @@ func ParseCertificatePEM(certPEM []byte) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to decode PEM certificate")
 	}
 	return x509.ParseCertificate(block.Bytes)
+}
+
+// GenerateECDSACertificate creates a self-signed ECDSA certificate (non-RSA) for testing
+func GenerateECDSACertificate(hostname string, notBefore, notAfter time.Time) (certPEM, keyPEM []byte, err error) {
+	// Generate ECDSA private key (P-256 curve)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization:  []string{"Test Org ECDSA"},
+			Country:       []string{"US"},
+			Province:      []string{"Test State"},
+			Locality:      []string{"Test City"},
+			StreetAddress: []string{"Test Street"},
+			PostalCode:    []string{"12345"},
+			CommonName:    hostname,
+		},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{hostname, "localhost"},
+	}
+
+	// Create certificate - this will use ECDSA signature algorithm
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Encode certificate
+	certPEM = pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	})
+
+	// Encode private key
+	keyBytes, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	keyPEM = pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+
+	return certPEM, keyPEM, nil
+}
+
+// GenerateValidECDSACertificate creates a valid ECDSA certificate for testing
+func GenerateValidECDSACertificate(hostname string) (certPEM, keyPEM []byte, err error) {
+	notBefore := time.Now().Add(-24 * time.Hour)    // 1 day ago
+	notAfter := time.Now().Add(60 * 24 * time.Hour) // 60 days from now
+	return GenerateECDSACertificate(hostname, notBefore, notAfter)
 }

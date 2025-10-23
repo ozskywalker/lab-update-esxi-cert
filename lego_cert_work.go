@@ -125,14 +125,23 @@ func checkCertificateWithDialer(hostname string, threshold float64, dialer TLSDi
 }
 
 // Check for cached certificate that's still valid
+// cacheDir parameter is optional - if empty, uses default temp directory
 func getCachedCertificate(config Config) (string, string, bool) {
+	return getCachedCertificateWithDir(config, "")
+}
+
+// getCachedCertificateWithDir allows specifying a custom cache directory for testing
+func getCachedCertificateWithDir(config Config, cacheDir string) (string, string, bool) {
 	// If force is enabled, skip cache completely
 	if config.Force {
 		logInfo("Force renewal enabled - skipping certificate cache")
 		return "", "", false
 	}
 
-	cacheDir := filepath.Join(os.TempDir(), "esxi-cert-cache")
+	// Use default cache directory if not specified
+	if cacheDir == "" {
+		cacheDir = filepath.Join(os.TempDir(), "esxi-cert-cache")
+	}
 	os.MkdirAll(cacheDir, 0755)
 
 	certPath := filepath.Join(cacheDir, fmt.Sprintf("%s-cert.pem", config.Hostname))
