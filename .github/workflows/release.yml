@@ -17,6 +17,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify tag is on main branch
+        run: |
+          TAG_BRANCH=$(git branch -r --contains ${{ github.ref }} | grep -E 'origin/main$' || true)
+          if [ -z "$TAG_BRANCH" ]; then
+            echo "Error: Tag must be created on main branch"
+            echo "This tag exists on: $(git branch -r --contains ${{ github.ref }})"
+            exit 1
+          fi
+
       - name: Set up Go
         id: setup-go
         uses: actions/setup-go@v6
@@ -55,4 +64,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checksums
-          path: dist/checksums.txt
+          path: |
+            dist/checksums.txt
+            sbom.spdx.json

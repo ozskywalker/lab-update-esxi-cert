@@ -60,6 +60,7 @@ Each release automatically includes:
 ### Security Files
 - `checksums.txt` - SHA256 checksums for all binaries
 - `checksums.txt.sig` - GPG signature of checksums (if configured)
+- `sbom.spdx.json` - Machine-readable Software Bill of Materials (SBOM) in JSON format adhering to the SPDX standard
 
 ### Documentation
 - `README.md` - Usage instructions
