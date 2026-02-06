@@ -188,14 +188,6 @@ func validateAWSCredentials(config Config) error {
 	return nil
 }
 
-// Helper function for min of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // GetDefaultDependencies returns the default dependencies for production use
 func GetDefaultDependencies() Dependencies {
 	return Dependencies{
@@ -283,7 +275,7 @@ func runWorkflow(config Config, deps Dependencies) error {
 
 	// Stop TSM-SSH service (hostd is ready after validation)
 	if err := deps.SSHStopper(config); err != nil {
-		logWarn("Warning: Failed to stop TSM-SSH service: %v", err)
+		logWarn("Failed to stop TSM-SSH service: %v", err)
 	}
 
 	return nil

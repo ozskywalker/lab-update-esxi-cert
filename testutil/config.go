@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -172,17 +173,13 @@ func toString(value interface{}) string {
 	switch v := value.(type) {
 	case string:
 		return v
-	case int:
-		return string(rune(v))
-	case float64:
-		return string(rune(int(v)))
 	case bool:
 		if v {
 			return "true"
 		}
 		return "false"
 	default:
-		return ""
+		return fmt.Sprintf("%v", v)
 	}
 }
 

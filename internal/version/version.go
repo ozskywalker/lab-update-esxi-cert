@@ -47,13 +47,11 @@ func (v *VersionInfo) String() string {
 		commitShort = "unknown"
 	}
 
+	displayVersion := v.Version
 	if v.GitTag != "" {
-		return fmt.Sprintf("%s (%s)", v.GitTag, commitShort)
+		displayVersion = v.GitTag
 	}
-	if v.Version != "development" {
-		return fmt.Sprintf("%s (%s)", v.Version, commitShort)
-	}
-	return fmt.Sprintf("%s (%s)", v.Version, commitShort)
+	return fmt.Sprintf("%s (%s)", displayVersion, commitShort)
 }
 
 // Detailed returns detailed version information for verbose output

@@ -241,7 +241,6 @@ func generateCertificate(config Config) (string, string, error) {
 	}
 
 	provider, err := route53.NewDNSProviderConfig(route53Config)
-
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize Route53 provider: %v", err)
 	}
@@ -279,7 +278,7 @@ func generateCertificate(config Config) (string, string, error) {
 		if err == nil {
 			logDebug("Certificate signature algorithm: %s", cert.SignatureAlgorithm.String())
 			if cert.SignatureAlgorithm != x509.SHA256WithRSA {
-				logWarn("Warning: Certificate does not use SHA256WithRSA signature algorithm")
+				logWarn("Certificate does not use SHA256WithRSA signature algorithm")
 			} else {
 				logInfo("Confirmed: Certificate uses SHA256WithRSA signature algorithm")
 			}
@@ -313,7 +312,7 @@ func generatePrivateKey(config Config) crypto.PrivateKey {
 
 	// Validate key size
 	if config.KeySize != 2048 && config.KeySize != 4096 {
-		logWarn("Warning: Unusual key size %d, using 4096 bits", config.KeySize)
+		logWarn("Unusual key size %d, using 4096 bits", config.KeySize)
 		config.KeySize = 4096
 	}
 
@@ -348,38 +347,35 @@ func uploadCertificate(config Config, certPath, keyPath string) error {
 	return installCertificateViaSSH(config, certData, keyData)
 }
 
-// Install certificate via SSH file operations with service management
-func installCertificateViaSSH(config Config, certData, keyData []byte) error {
-	logInfo("Installing certificate via SSH file operations with SOAP API service management...")
-
-	// Create context with timeout
+// getESXiServiceSystem connects to ESXi via SOAP API and returns the service system
+// for managing host services like TSM-SSH. The caller is responsible for calling
+// the returned cleanup function when done.
+func getESXiServiceSystem(config Config) (*object.HostServiceSystem, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 
-	// Create ESXi connection URL for SOAP API service management
 	esxiURL, err := url.Parse(fmt.Sprintf("https://%s/sdk", config.Hostname))
 	if err != nil {
-		return fmt.Errorf("failed to parse ESXi URL for service management: %v", err)
+		cancel()
+		return nil, nil, fmt.Errorf("failed to parse ESXi URL: %v", err)
 	}
-
-	// Set credentials
 	esxiURL.User = url.UserPassword(config.ESXiUsername, config.ESXiPassword)
 
-	// Connect to ESXi via SOAP API for service management
-	logInfo("Connecting to ESXi SOAP API for SSH service management...")
+	logDebug("Connecting to ESXi SOAP API...")
 	client, err := govmomi.NewClient(ctx, esxiURL, true)
 	if err != nil {
-		return fmt.Errorf("failed to connect to ESXi SOAP API for service management: %v", err)
+		cancel()
+		return nil, nil, fmt.Errorf("failed to connect to ESXi SOAP API: %v", err)
 	}
-	defer client.Logout(ctx)
 
-	logInfo("Successfully connected to ESXi SOAP API for service management")
+	cleanup := func() {
+		client.Logout(ctx)
+		cancel()
+	}
 
 	// Find the host system
 	finder := find.NewFinder(client.Client, true)
 	var hostSystem *object.HostSystem
 
-	// Try to find host system
 	hosts, err := finder.HostSystemList(ctx, "*")
 	if err == nil && len(hosts) > 0 {
 		hostSystem = hosts[0]
@@ -400,23 +396,36 @@ func installCertificateViaSSH(config Config, certData, keyData []byte) error {
 	}
 
 	if hostSystem == nil {
-		return fmt.Errorf("failed to find ESXi host system for service management")
+		cleanup()
+		return nil, nil, fmt.Errorf("failed to find ESXi host system")
 	}
 
-	// Get the service system for managing SSH service
 	serviceSystem, err := hostSystem.ConfigManager().ServiceSystem(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get service system: %v", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("failed to get service system: %v", err)
 	}
 
-	// Check and start TSM-SSH service if needed
-	// sshServiceWasRunning, err := ensureSSHServiceRunning(ctx, serviceSystem)
-	_, err = ensureSSHServiceRunning(ctx, serviceSystem)
+	return serviceSystem, cleanup, nil
+}
+
+// Install certificate via SSH file operations with service management
+func installCertificateViaSSH(config Config, certData, keyData []byte) error {
+	logInfo("Installing certificate via SSH file operations with SOAP API service management...")
+
+	serviceSystem, cleanup, err := getESXiServiceSystem(config)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	logInfo("Successfully connected to ESXi SOAP API for service management")
+
+	_, err = ensureSSHServiceRunning(context.Background(), serviceSystem)
 	if err != nil {
 		return fmt.Errorf("failed to manage SSH service: %v", err)
 	}
 
-	// Perform SSH certificate installation
 	return performSSHCertificateInstallation(config, certData, keyData)
 }
 
@@ -424,63 +433,13 @@ func installCertificateViaSSH(config Config, certData, keyData []byte) error {
 func stopSSHServiceOnHost(config Config) error {
 	logInfo("Stopping TSM-SSH service...")
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Create ESXi connection URL for SOAP API service management
-	esxiURL, err := url.Parse(fmt.Sprintf("https://%s/sdk", config.Hostname))
+	serviceSystem, cleanup, err := getESXiServiceSystem(config)
 	if err != nil {
-		return fmt.Errorf("failed to parse ESXi URL for service management: %v", err)
+		return err
 	}
+	defer cleanup()
 
-	// Set credentials
-	esxiURL.User = url.UserPassword(config.ESXiUsername, config.ESXiPassword)
-
-	// Connect to ESXi via SOAP API for service management
-	logDebug("Connecting to ESXi SOAP API for SSH service stop...")
-	client, err := govmomi.NewClient(ctx, esxiURL, true)
-	if err != nil {
-		return fmt.Errorf("failed to connect to ESXi SOAP API: %v", err)
-	}
-	defer client.Logout(ctx)
-
-	// Find the host system
-	finder := find.NewFinder(client.Client, true)
-	var hostSystem *object.HostSystem
-
-	hosts, err := finder.HostSystemList(ctx, "*")
-	if err == nil && len(hosts) > 0 {
-		hostSystem = hosts[0]
-	} else {
-		// Try common host references as fallback
-		commonHostRefs := []string{"ha-host", "host-1", "host-0"}
-		for _, hostRef := range commonHostRefs {
-			hostMOR := types.ManagedObjectReference{
-				Type:  "HostSystem",
-				Value: hostRef,
-			}
-			testHost := object.NewHostSystem(client.Client, hostMOR)
-			if _, err := testHost.ObjectName(ctx); err == nil {
-				hostSystem = testHost
-				break
-			}
-		}
-	}
-
-	if hostSystem == nil {
-		return fmt.Errorf("failed to find ESXi host system for service management")
-	}
-
-	// Get the service system for managing SSH service
-	serviceSystem, err := hostSystem.ConfigManager().ServiceSystem(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get service system: %v", err)
-	}
-
-	// Stop TSM-SSH service
-	err = stopSSHService(ctx, serviceSystem)
-	if err != nil {
+	if err := serviceSystem.Stop(context.Background(), "TSM-SSH"); err != nil {
 		return fmt.Errorf("failed to stop TSM-SSH service: %v", err)
 	}
 
@@ -524,7 +483,7 @@ func performSSHCertificateInstallation(config Config, certData, keyData []byte) 
 	// Step 1: Backup existing certificates
 	err = backupExistingCertificates(client)
 	if err != nil {
-		logWarn("Warning: Failed to backup existing certificates: %v", err)
+		logWarn("Failed to backup existing certificates: %v", err)
 	}
 
 	// Step 2: Copy new certificate and key files
@@ -605,7 +564,7 @@ func copyCertificateFiles(client *ssh.Client, certData, keyData []byte) error {
 		session.Close()
 
 		if err != nil {
-			logWarn("Warning: Permission command '%s' failed: %v", cmd, err)
+			logWarn("Permission command '%s' failed: %v", cmd, err)
 		} else {
 			logDebug("Permission command '%s' completed successfully", cmd)
 		}
@@ -678,27 +637,6 @@ func restartESXiServicesViaSSH(client *ssh.Client) error {
 	return nil
 }
 
-// Get current certificate fingerprint for comparison
-// func getCurrentCertificateFingerprint(hostname string) string {
-// 	conn, err := tls.Dial("tcp", hostname+":443", &tls.Config{
-// 		InsecureSkipVerify: true,
-// 	})
-// 	if err != nil {
-// 		log.Printf("Failed to connect to get certificate fingerprint: %v", err)
-// 		return ""
-// 	}
-// 	defer conn.Close()
-
-// 	certs := conn.ConnectionState().PeerCertificates
-// 	if len(certs) == 0 {
-// 		return ""
-// 	}
-
-// 	// Return SHA-256 fingerprint
-// 	fingerprint := strings.ToLower(fmt.Sprintf("%x", certs[0].Signature))
-// 	return fingerprint[:16] // First 16 characters for comparison
-// }
-
 // Ensure SSH service is running, return true if it was already running
 func ensureSSHServiceRunning(ctx context.Context, serviceSystem *object.HostServiceSystem) (bool, error) {
 	logInfo("Checking TSM-SSH service status...")
@@ -740,15 +678,6 @@ func ensureSSHServiceRunning(ctx context.Context, serviceSystem *object.HostServ
 
 	logInfo("TSM-SSH service started successfully")
 	return false, nil
-}
-
-// Stop SSH service
-func stopSSHService(ctx context.Context, serviceSystem *object.HostServiceSystem) error {
-	err := serviceSystem.Stop(ctx, "TSM-SSH")
-	if err != nil {
-		return fmt.Errorf("failed to stop TSM-SSH service: %v", err)
-	}
-	return nil
 }
 
 // Validate that the new certificate is installed on the ESXi server with custom dialer and timeouts

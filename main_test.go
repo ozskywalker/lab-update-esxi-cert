@@ -612,31 +612,6 @@ func TestLoggingStructure(t *testing.T) {
 	}
 }
 
-func TestMinFunction(t *testing.T) {
-	tests := []struct {
-		name     string
-		a        int
-		b        int
-		expected int
-	}{
-		{"a less than b", 5, 10, 5},
-		{"b less than a", 10, 5, 5},
-		{"equal values", 7, 7, 7},
-		{"negative values", -5, -10, -10},
-		{"zero and positive", 0, 5, 0},
-		{"zero and negative", 0, -5, -5},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := min(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("min(%d, %d) = %d, expected %d", tt.a, tt.b, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGetDefaultDependencies(t *testing.T) {
 	deps := GetDefaultDependencies()
 
