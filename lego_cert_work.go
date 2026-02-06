@@ -417,29 +417,75 @@ func installCertificateViaSSH(config Config, certData, keyData []byte) error {
 	}
 
 	// Perform SSH certificate installation
-	sshErr := performSSHCertificateInstallation(config, certData, keyData)
+	return performSSHCertificateInstallation(config, certData, keyData)
+}
 
-	// // Stop TSM-SSH service if we started it
-	// if !sshServiceWasRunning {
-	// 	log.Printf("Stopping TSM-SSH service as it was not originally running...")
-	// 	err = stopSSHService(ctx, serviceSystem)
-	// 	if err != nil {
-	// 		log.Printf("Warning: Failed to stop TSM-SSH service: %v", err)
-	// 	} else {
-	// 		log.Printf("TSM-SSH service stopped successfully")
-	// 	}
-	// }
-
-	// Stop TSM-SSH service anyway
+// stopSSHServiceOnHost connects to ESXi via SOAP API and stops the TSM-SSH service
+func stopSSHServiceOnHost(config Config) error {
 	logInfo("Stopping TSM-SSH service...")
-	err = stopSSHService(ctx, serviceSystem)
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Create ESXi connection URL for SOAP API service management
+	esxiURL, err := url.Parse(fmt.Sprintf("https://%s/sdk", config.Hostname))
 	if err != nil {
-		logWarn("Warning: Failed to stop TSM-SSH service: %v", err)
-	} else {
-		logInfo("TSM-SSH service stopped successfully")
+		return fmt.Errorf("failed to parse ESXi URL for service management: %v", err)
 	}
 
-	return sshErr
+	// Set credentials
+	esxiURL.User = url.UserPassword(config.ESXiUsername, config.ESXiPassword)
+
+	// Connect to ESXi via SOAP API for service management
+	logDebug("Connecting to ESXi SOAP API for SSH service stop...")
+	client, err := govmomi.NewClient(ctx, esxiURL, true)
+	if err != nil {
+		return fmt.Errorf("failed to connect to ESXi SOAP API: %v", err)
+	}
+	defer client.Logout(ctx)
+
+	// Find the host system
+	finder := find.NewFinder(client.Client, true)
+	var hostSystem *object.HostSystem
+
+	hosts, err := finder.HostSystemList(ctx, "*")
+	if err == nil && len(hosts) > 0 {
+		hostSystem = hosts[0]
+	} else {
+		// Try common host references as fallback
+		commonHostRefs := []string{"ha-host", "host-1", "host-0"}
+		for _, hostRef := range commonHostRefs {
+			hostMOR := types.ManagedObjectReference{
+				Type:  "HostSystem",
+				Value: hostRef,
+			}
+			testHost := object.NewHostSystem(client.Client, hostMOR)
+			if _, err := testHost.ObjectName(ctx); err == nil {
+				hostSystem = testHost
+				break
+			}
+		}
+	}
+
+	if hostSystem == nil {
+		return fmt.Errorf("failed to find ESXi host system for service management")
+	}
+
+	// Get the service system for managing SSH service
+	serviceSystem, err := hostSystem.ConfigManager().ServiceSystem(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get service system: %v", err)
+	}
+
+	// Stop TSM-SSH service
+	err = stopSSHService(ctx, serviceSystem)
+	if err != nil {
+		return fmt.Errorf("failed to stop TSM-SSH service: %v", err)
+	}
+
+	logInfo("TSM-SSH service stopped successfully")
+	return nil
 }
 
 // Perform SSH certificate installation by copying files and restarting services

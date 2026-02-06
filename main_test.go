@@ -294,6 +294,10 @@ func TestRunWorkflow_DryRun(t *testing.T) {
 			t.Error("CertValidator should not be called in dry-run mode")
 			return false, nil
 		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called in dry-run mode")
+			return nil
+		},
 	}
 
 	// Test the workflow
@@ -320,7 +324,7 @@ func TestRunWorkflow_ForceRenewal(t *testing.T) {
 	}
 
 	// Track which functions were called
-	var awsValidatorCalled, certCheckerCalled, certGeneratorCalled, certUploaderCalled, certValidatorCalled bool
+	var awsValidatorCalled, certCheckerCalled, certGeneratorCalled, certUploaderCalled, certValidatorCalled, sshStopperCalled bool
 
 	// Create mock dependencies
 	mockDeps := Dependencies{
@@ -348,6 +352,10 @@ func TestRunWorkflow_ForceRenewal(t *testing.T) {
 			certValidatorCalled = true
 			return true, nil
 		},
+		SSHStopper: func(Config) error {
+			sshStopperCalled = true
+			return nil
+		},
 	}
 
 	// Test the workflow
@@ -371,6 +379,9 @@ func TestRunWorkflow_ForceRenewal(t *testing.T) {
 	}
 	if !certValidatorCalled {
 		t.Error("Certificate validator should be called for force renewal")
+	}
+	if !sshStopperCalled {
+		t.Error("SSHStopper should be called for force renewal")
 	}
 }
 
@@ -403,6 +414,10 @@ func TestRunWorkflow_AWSValidationFailure(t *testing.T) {
 		CertValidator: func(string, *x509.Certificate) (bool, error) {
 			t.Error("CertValidator should not be called when AWS validation fails")
 			return false, nil
+		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called when AWS validation fails")
+			return nil
 		},
 	}
 
@@ -444,6 +459,10 @@ func TestRunWorkflow_CertificateCheckFailure(t *testing.T) {
 		CertValidator: func(string, *x509.Certificate) (bool, error) {
 			t.Error("CertValidator should not be called when cert check fails")
 			return false, nil
+		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called when cert check fails")
+			return nil
 		},
 	}
 
@@ -490,6 +509,10 @@ func TestRunWorkflow_CertificateUpToDate(t *testing.T) {
 		CertValidator: func(string, *x509.Certificate) (bool, error) {
 			t.Error("CertValidator should not be called when cert is up to date")
 			return false, nil
+		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called when cert is up to date")
+			return nil
 		},
 	}
 
@@ -633,6 +656,9 @@ func TestGetDefaultDependencies(t *testing.T) {
 	if deps.CertValidator == nil {
 		t.Error("CertValidator should not be nil")
 	}
+	if deps.SSHStopper == nil {
+		t.Error("SSHStopper should not be nil")
+	}
 }
 
 func TestRunWorkflow_CertGenerationFailure(t *testing.T) {
@@ -673,6 +699,10 @@ func TestRunWorkflow_CertGenerationFailure(t *testing.T) {
 		CertValidator: func(string, *x509.Certificate) (bool, error) {
 			t.Error("CertValidator should not be called when generation fails")
 			return false, nil
+		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called when generation fails")
+			return nil
 		},
 	}
 
@@ -721,6 +751,10 @@ func TestRunWorkflow_CertUploadFailure(t *testing.T) {
 			t.Error("CertValidator should not be called when upload fails")
 			return false, nil
 		},
+		SSHStopper: func(Config) error {
+			t.Error("SSHStopper should not be called when upload fails")
+			return nil
+		},
 	}
 
 	err := runWorkflow(config, mockDeps)
@@ -733,6 +767,60 @@ func TestRunWorkflow_CertUploadFailure(t *testing.T) {
 }
 
 func TestRunWorkflow_ValidationWarning(t *testing.T) {
+	config := Config{
+		Hostname:         "test.example.com",
+		Domain:           "example.com",
+		Email:            "test@example.com",
+		Route53KeyID:     "AKIATEST123",
+		Route53SecretKey: "test-secret",
+		Route53Region:    "us-east-1",
+		ESXiUsername:     "root",
+		ESXiPassword:     "password",
+		Force:            true,
+		LogLevel:         "INFO",
+		Threshold:        0.33,
+		KeySize:          4096,
+	}
+
+	sshStopperCalled := false
+
+	mockDeps := Dependencies{
+		AWSValidator: func(Config) error {
+			return nil
+		},
+		CertChecker: func(string, float64) (bool, *x509.Certificate, error) {
+			cert := &x509.Certificate{
+				NotAfter: time.Now().Add(60 * 24 * time.Hour),
+			}
+			return false, cert, nil
+		},
+		CertGenerator: func(Config) (string, string, error) {
+			return "cert.pem", "key.pem", nil
+		},
+		CertUploader: func(Config, string, string) error {
+			return nil
+		},
+		CertValidator: func(string, *x509.Certificate) (bool, error) {
+			// Return validation error (not failure, just warning)
+			return false, fmt.Errorf("connection timeout")
+		},
+		SSHStopper: func(Config) error {
+			sshStopperCalled = true
+			return nil
+		},
+	}
+
+	// Should succeed even if validation has errors (it's just a warning)
+	err := runWorkflow(config, mockDeps)
+	if err != nil {
+		t.Errorf("Workflow should succeed even with validation warnings, got error: %v", err)
+	}
+	if !sshStopperCalled {
+		t.Error("SSHStopper should be called even when validation has warnings")
+	}
+}
+
+func TestRunWorkflow_SSHStopperFailure(t *testing.T) {
 	config := Config{
 		Hostname:         "test.example.com",
 		Domain:           "example.com",
@@ -765,14 +853,16 @@ func TestRunWorkflow_ValidationWarning(t *testing.T) {
 			return nil
 		},
 		CertValidator: func(string, *x509.Certificate) (bool, error) {
-			// Return validation error (not failure, just warning)
-			return false, fmt.Errorf("connection timeout")
+			return true, nil
+		},
+		SSHStopper: func(Config) error {
+			return fmt.Errorf("SOAP API connection refused")
 		},
 	}
 
-	// Should succeed even if validation has errors (it's just a warning)
+	// Workflow should succeed even when SSHStopper fails (best-effort)
 	err := runWorkflow(config, mockDeps)
 	if err != nil {
-		t.Errorf("Workflow should succeed even with validation warnings, got error: %v", err)
+		t.Errorf("Workflow should succeed even when SSHStopper fails, got error: %v", err)
 	}
 }

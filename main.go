@@ -72,6 +72,7 @@ type Dependencies struct {
 	CertGenerator func(Config) (string, string, error)
 	CertUploader  func(Config, string, string) error
 	CertValidator func(string, *x509.Certificate) (bool, error)
+	SSHStopper    func(Config) error
 }
 
 // Parse log level from string
@@ -207,6 +208,7 @@ func GetDefaultDependencies() Dependencies {
 		CertValidator: func(hostname string, oldCert *x509.Certificate) (bool, error) {
 			return validateCertificateWithDialer(hostname, oldCert, &DefaultTLSDialer{}, maxCheckDuration, defaultCheckInterval)
 		},
+		SSHStopper: stopSSHServiceOnHost,
 	}
 }
 
@@ -277,6 +279,11 @@ func runWorkflow(config Config, deps Dependencies) error {
 		logInfo("New certificate successfully validated!")
 	} else {
 		logWarn("Could not validate new certificate within the timeout period.")
+	}
+
+	// Stop TSM-SSH service (hostd is ready after validation)
+	if err := deps.SSHStopper(config); err != nil {
+		logWarn("Warning: Failed to stop TSM-SSH service: %v", err)
 	}
 
 	return nil
