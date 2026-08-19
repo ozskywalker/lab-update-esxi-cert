@@ -1,7 +1,6 @@
 package version
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -107,7 +106,7 @@ func TestVersionInfo_Detailed(t *testing.T) {
 		GitCommit: "abcd1234567890",
 		GitTag:    "v1.0.0",
 		BuildDate: "2024-01-01T00:00:00Z",
-		GoVersion: "go1.24.0",
+		GoVersion: "go1.26.5",
 		Compiler:  "gc",
 		Platform:  "linux/amd64",
 	}
@@ -120,7 +119,7 @@ func TestVersionInfo_Detailed(t *testing.T) {
 		"Git Commit: abcd1234567890",
 		"Git Tag:    v1.0.0",
 		"Build Date: 2024-01-01T00:00:00Z",
-		"Go Version: go1.24.0",
+		"Go Version: go1.26.5",
 		"Compiler:   gc",
 		"Platform:   linux/amd64",
 	}
@@ -145,160 +144,272 @@ func TestBuildTimeVariables(t *testing.T) {
 	// GitCommit and GitTag can be empty in development builds
 }
 
-func TestCheckForUpdates_WithMockServer(t *testing.T) {
-	// Save original constants
-	originalOwner := GitHubOwner
-	originalRepo := GitHubRepo
-	defer func() {
-		// Note: Can't restore constants, but test runs in isolation
-		_ = originalOwner
-		_ = originalRepo
-	}()
+// setupMockGitHub starts a mock GitHub API server and points the package's
+// update-check dependencies (githubAPIBase + httpClient) at it. The previous
+// values are restored automatically when the test completes.
+func setupMockGitHub(t *testing.T, handler http.HandlerFunc) {
+	t.Helper()
 
-	t.Run("update available", func(t *testing.T) {
-		// Create mock GitHub API server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate GitHub tags API response
-			response := `[
-				{"name": "v2.0.0", "zipball_url": "https://github.com/test/repo/zipball/v2.0.0"},
-				{"name": "v1.5.0", "zipball_url": "https://github.com/test/repo/zipball/v1.5.0"},
-				{"name": "v1.0.0", "zipball_url": "https://github.com/test/repo/zipball/v1.0.0"}
-			]`
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(response))
-		}))
-		defer mockServer.Close()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 
-		// Set test version to simulate outdated version
-		oldVersion := Version
-		oldGitTag := GitTag
-		Version = "v1.0.0"
-		GitTag = "v1.0.0"
-		defer func() {
-			Version = oldVersion
-			GitTag = oldGitTag
-		}()
-
-		// Note: This test verifies the structure and logic of CheckForUpdates
-		// The actual GitHub API call is difficult to mock without refactoring
-		// production code to accept a custom HTTP client
-
-		// Test UpdateInfo structure
-		updateInfo := &UpdateInfo{
-			CurrentVersion: "v1.0.0",
-			LatestVersion:  "v2.0.0",
-			UpdateURL:      "https://github.com/test/repo/releases/tag/v2.0.0",
-			IsUpToDate:     false,
-		}
-
-		if updateInfo.CurrentVersion != "v1.0.0" {
-			t.Errorf("Expected CurrentVersion v1.0.0, got %s", updateInfo.CurrentVersion)
-		}
-		if updateInfo.LatestVersion != "v2.0.0" {
-			t.Errorf("Expected LatestVersion v2.0.0, got %s", updateInfo.LatestVersion)
-		}
-		if updateInfo.IsUpToDate {
-			t.Error("Expected IsUpToDate to be false when update is available")
-		}
-		if !strings.Contains(updateInfo.UpdateURL, "github.com") {
-			t.Errorf("Expected UpdateURL to contain github.com, got %s", updateInfo.UpdateURL)
-		}
-	})
-
-	t.Run("already up to date", func(t *testing.T) {
-		// Test UpdateInfo for up-to-date scenario
-		updateInfo := &UpdateInfo{
-			CurrentVersion: "v2.0.0",
-			LatestVersion:  "v2.0.0",
-			UpdateURL:      "https://github.com/test/repo/releases/tag/v2.0.0",
-			IsUpToDate:     true,
-		}
-
-		if !updateInfo.IsUpToDate {
-			t.Error("Expected IsUpToDate to be true when versions match")
-		}
-	})
-
-	t.Run("update info fields populated correctly", func(t *testing.T) {
-		// Test that all UpdateInfo fields can be populated
-		updateInfo := &UpdateInfo{
-			CurrentVersion: "v1.5.0",
-			LatestVersion:  "v2.0.0",
-			UpdateURL:      "https://github.com/owner/repo/releases/tag/v2.0.0",
-			IsUpToDate:     false,
-		}
-
-		// Verify all fields are accessible and correct type
-		if len(updateInfo.CurrentVersion) == 0 {
-			t.Error("CurrentVersion should be populated")
-		}
-		if len(updateInfo.LatestVersion) == 0 {
-			t.Error("LatestVersion should be populated")
-		}
-		if len(updateInfo.UpdateURL) == 0 {
-			t.Error("UpdateURL should be populated")
-		}
-
-		// Test boolean field
-		isUpToDate := updateInfo.IsUpToDate
-		if isUpToDate {
-			t.Error("Expected IsUpToDate to be false for this test case")
-		}
+	oldBase := githubAPIBase
+	oldClient := httpClient
+	githubAPIBase = server.URL
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		githubAPIBase = oldBase
+		httpClient = oldClient
 	})
 }
 
+// setTestVersion sets the package version variables for the duration of a test.
+func setTestVersion(t *testing.T, version, gitTag string) {
+	t.Helper()
+	oldVersion := Version
+	oldGitTag := GitTag
+	Version = version
+	GitTag = gitTag
+	t.Cleanup(func() {
+		Version = oldVersion
+		GitTag = oldGitTag
+	})
+}
+
+func TestCheckForUpdates_UpdateAvailable(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/tags") {
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"name":"v2.0.0"}]`))
+	})
+	setTestVersion(t, "v1.0.0", "v1.0.0")
+
+	updateInfo, err := CheckForUpdates()
+	if err != nil {
+		t.Fatalf("CheckForUpdates returned error: %v", err)
+	}
+	if updateInfo.IsUpToDate {
+		t.Error("Expected IsUpToDate to be false when an update is available")
+	}
+	if updateInfo.CurrentVersion != "v1.0.0" {
+		t.Errorf("Expected CurrentVersion v1.0.0, got %s", updateInfo.CurrentVersion)
+	}
+	if updateInfo.LatestVersion != "v2.0.0" {
+		t.Errorf("Expected LatestVersion v2.0.0, got %s", updateInfo.LatestVersion)
+	}
+	if !strings.Contains(updateInfo.UpdateURL, "github.com") {
+		t.Errorf("Expected UpdateURL to contain github.com, got %s", updateInfo.UpdateURL)
+	}
+}
+
+func TestCheckForUpdates_UpToDate(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"name":"v1.0.0"}]`))
+	})
+	setTestVersion(t, "v1.0.0", "v1.0.0")
+
+	updateInfo, err := CheckForUpdates()
+	if err != nil {
+		t.Fatalf("CheckForUpdates returned error: %v", err)
+	}
+	if !updateInfo.IsUpToDate {
+		t.Errorf("Expected IsUpToDate to be true when versions match, got CurrentVersion=%s LatestVersion=%s",
+			updateInfo.CurrentVersion, updateInfo.LatestVersion)
+	}
+}
+
+func TestCheckForUpdates_UsesGitTagWhenSet(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"name":"v2.0.0"}]`))
+	})
+	// Version defaults to "development" in non-release builds, but GitTag
+	// (injected via ldflags in release builds) should be used for comparison.
+	setTestVersion(t, "development", "v1.0.0")
+
+	updateInfo, err := CheckForUpdates()
+	if err != nil {
+		t.Fatalf("CheckForUpdates returned error: %v", err)
+	}
+	if updateInfo.CurrentVersion != "v1.0.0" {
+		t.Errorf("Expected CurrentVersion to use GitTag v1.0.0, got %s", updateInfo.CurrentVersion)
+	}
+	if updateInfo.IsUpToDate {
+		t.Error("Expected IsUpToDate to be false when GitTag is older than latest")
+	}
+}
+
+func TestCheckForUpdates_HTTPError(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	setTestVersion(t, "v1.0.0", "v1.0.0")
+
+	if _, err := CheckForUpdates(); err == nil {
+		t.Error("Expected an error when GitHub returns a non-200 status")
+	}
+}
+
+func TestCheckForUpdates_MalformedJSON(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"tag_name":`)) // truncated JSON
+	})
+	setTestVersion(t, "v1.0.0", "v1.0.0")
+
+	if _, err := CheckForUpdates(); err == nil {
+		t.Error("Expected an error when the response is malformed")
+	}
+}
+
+func TestCheckForUpdates_NoTags(t *testing.T) {
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	})
+	setTestVersion(t, "v1.0.0", "v1.0.0")
+
+	if _, err := CheckForUpdates(); err == nil {
+		t.Error("Expected an error when the response has no tags")
+	}
+}
+
+func TestCheckForUpdates_NonSemverCurrent(t *testing.T) {
+	// A "development" version is not valid semver, so the check should fail
+	// gracefully (callers treat the error as "no notification").
+	setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"name":"v2.0.0"}]`))
+	})
+	setTestVersion(t, "development", "")
+
+	if _, err := CheckForUpdates(); err == nil {
+		t.Error("Expected an error when the current version is not valid semver")
+	}
+}
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		name    string
+		current string
+		latest  string
+		want    bool
+		wantErr bool
+	}{
+		{name: "current older", current: "v1.0.0", latest: "v2.0.0", want: false},
+		{name: "current equal", current: "v2.0.0", latest: "v2.0.0", want: true},
+		{name: "current newer", current: "v2.0.1", latest: "v2.0.0", want: true},
+		{name: "no v prefix", current: "1.0.0", latest: "v1.0.0", want: true},
+		{name: "latest older", current: "v2.0.0", latest: "v1.5.0", want: true},
+		{name: "invalid current", current: "development", latest: "v2.0.0", wantErr: true},
+		{name: "invalid latest", current: "v2.0.0", latest: "not-a-version", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := compareVersions(tt.current, tt.latest)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected an error, got nil (result=%v)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("compareVersions(%q, %q) = %v, want %v", tt.current, tt.latest, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetUpdateNotification(t *testing.T) {
-	t.Run("returns empty string on up-to-date", func(t *testing.T) {
-		// This function makes a live API call, so we test the logic by
-		// verifying it returns an empty string in error/up-to-date scenarios
-		// In a real environment with no internet or rate limiting, this may
-		// return empty string, which is correct behavior
+	t.Run("update available returns notification", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"v2.0.0"}]`))
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
 
 		result := GetUpdateNotification()
-
-		// Result should either be:
-		// - Empty string (up-to-date or error)
-		// - Update notification string (if update available)
-		if result != "" {
-			// If not empty, should contain update information
-			if !strings.Contains(result, "Update available") &&
-				!strings.Contains(result, "→") &&
-				!strings.Contains(result, "Download") {
-				t.Errorf("If notification is not empty, it should contain update info, got: %s", result)
+		if result == "" {
+			t.Fatal("Expected a non-empty notification when an update is available")
+		}
+		for _, fragment := range []string{"Update available", "→", "Download"} {
+			if !strings.Contains(result, fragment) {
+				t.Errorf("Notification missing %q: %s", fragment, result)
 			}
 		}
 	})
 
-	t.Run("notification format is correct when update available", func(t *testing.T) {
-		// Test the notification string format by simulating UpdateInfo
-		currentVer := "v1.0.0"
-		latestVer := "v2.0.0"
-		downloadURL := "https://github.com/owner/repo/releases/tag/v2.0.0"
+	t.Run("up to date returns empty string", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"v1.0.0"}]`))
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
 
-		// Manually construct what the notification should look like
-		expected := fmt.Sprintf("📦 Update available: %s → %s - Download: %s",
-			currentVer, latestVer, downloadURL)
+		if result := GetUpdateNotification(); result != "" {
+			t.Errorf("Expected empty notification when up to date, got %q", result)
+		}
+	})
 
-		// Verify format contains expected components
-		if !strings.Contains(expected, "📦") {
-			t.Error("Expected notification to contain emoji")
+	t.Run("error returns empty string", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
+
+		if result := GetUpdateNotification(); result != "" {
+			t.Errorf("Expected empty notification on error, got %q", result)
 		}
-		if !strings.Contains(expected, "Update available") {
-			t.Error("Expected notification to contain 'Update available'")
+	})
+}
+
+func TestQuietlyCheckForUpdates(t *testing.T) {
+	t.Run("returns true when update available", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"v2.0.0"}]`))
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
+
+		if !QuietlyCheckForUpdates() {
+			t.Error("Expected QuietlyCheckForUpdates to return true when update available")
 		}
-		if !strings.Contains(expected, "→") {
-			t.Error("Expected notification to contain arrow")
+	})
+
+	t.Run("returns false when up to date", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"v1.0.0"}]`))
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
+
+		if QuietlyCheckForUpdates() {
+			t.Error("Expected QuietlyCheckForUpdates to return false when up to date")
 		}
-		if !strings.Contains(expected, "Download") {
-			t.Error("Expected notification to contain 'Download'")
+	})
+
+	t.Run("returns false on error without panic", func(t *testing.T) {
+		setupMockGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		setTestVersion(t, "v1.0.0", "v1.0.0")
+
+		if QuietlyCheckForUpdates() {
+			t.Error("Expected QuietlyCheckForUpdates to return false on error")
 		}
 	})
 }
 
 func TestPrintUpdateNotification_Format(t *testing.T) {
-	// Test the PrintUpdateNotification formatting logic
-
+	// PrintUpdateNotification writes to stdout which is hard to capture
+	// without redirection; verify the UpdateInfo fields drive the branches.
 	t.Run("up-to-date message format", func(t *testing.T) {
 		updateInfo := &UpdateInfo{
 			CurrentVersion: "v1.0.0",
@@ -307,8 +418,6 @@ func TestPrintUpdateNotification_Format(t *testing.T) {
 			IsUpToDate:     true,
 		}
 
-		// We can't easily capture fmt.Printf output without os.Stdout redirection
-		// but we can test the logic by verifying the struct fields
 		if !updateInfo.IsUpToDate {
 			t.Error("Expected IsUpToDate to be true")
 		}
@@ -324,37 +433,6 @@ func TestPrintUpdateNotification_Format(t *testing.T) {
 
 		if updateInfo.IsUpToDate {
 			t.Error("Expected IsUpToDate to be false")
-		}
-		if updateInfo.CurrentVersion >= updateInfo.LatestVersion {
-			t.Error("Expected LatestVersion to be newer than CurrentVersion")
-		}
-	})
-}
-
-func TestQuietlyCheckForUpdates(t *testing.T) {
-	t.Run("returns boolean without panic", func(t *testing.T) {
-		// QuietlyCheckForUpdates should never panic, always return a boolean
-		// Even on error, it returns false
-
-		// This makes a live API call, so we just verify it doesn't panic
-		// and returns a bool
-		result := QuietlyCheckForUpdates()
-
-		// Result should be a valid boolean (true or false)
-		// We can't assert a specific value without knowing if there's an update
-		_ = result // Just verify it executes without panic
-	})
-
-	t.Run("handles errors gracefully", func(t *testing.T) {
-		// The function should return false on any error
-		// and log debug message (which we can't easily capture)
-
-		// Test that the function signature is correct
-		updateAvailable := QuietlyCheckForUpdates()
-
-		// Should return a boolean value
-		if updateAvailable != true && updateAvailable != false {
-			t.Error("QuietlyCheckForUpdates should return a boolean")
 		}
 	})
 }

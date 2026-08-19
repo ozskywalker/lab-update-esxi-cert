@@ -104,7 +104,7 @@ Version:    v1.0.0
 Git Commit: a1b2c3d4e5f6789012345678901234567890abcd
 Git Tag:    v1.0.0
 Build Date: 2024-01-15T10:30:45Z
-Go Version: go1.21.5
+Go Version: go1.26.6
 Compiler:   gc
 Platform:   linux/amd64
 ```

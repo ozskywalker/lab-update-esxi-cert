@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -48,13 +47,7 @@ func TestAWSCredentialValidation(t *testing.T) {
 			"test-secret-key",
 			"",
 		)),
-		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL:           mockServer.URL,
-					SigningRegion: region,
-				}, nil
-			})),
+		config.WithBaseEndpoint(mockServer.URL),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create AWS config: %v", err)
@@ -109,13 +102,7 @@ func TestAWSCredentialValidationFailure(t *testing.T) {
 			"invalid-secret-key",
 			"",
 		)),
-		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL:           mockServer.URL,
-					SigningRegion: region,
-				}, nil
-			})),
+		config.WithBaseEndpoint(mockServer.URL),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create AWS config: %v", err)
@@ -179,13 +166,7 @@ func TestAWSSessionTokenValidation(t *testing.T) {
 			"test-secret-key",
 			"test-session-token",
 		)),
-		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL:           mockServer.URL,
-					SigningRegion: region,
-				}, nil
-			})),
+		config.WithBaseEndpoint(mockServer.URL),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create AWS config: %v", err)
@@ -323,16 +304,7 @@ func TestAWSRegionValidation(t *testing.T) {
 					"test-secret",
 					"",
 				)),
-				config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-					func(service, regionParam string, options ...interface{}) (aws.Endpoint, error) {
-						if regionParam != region {
-							t.Errorf("Expected region %s, got %s", region, regionParam)
-						}
-						return aws.Endpoint{
-							URL:           mockServer.URL,
-							SigningRegion: region,
-						}, nil
-					})),
+				config.WithBaseEndpoint(mockServer.URL),
 			)
 			if err != nil {
 				t.Fatalf("Failed to create AWS config for region %s: %v", region, err)
@@ -381,13 +353,7 @@ func TestAWSDefaultCredentialChain(t *testing.T) {
 		// Create AWS config WITHOUT WithCredentialsProvider (uses default chain)
 		cfg, err := config.LoadDefaultConfig(context.TODO(),
 			config.WithRegion("us-east-1"),
-			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-				func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-					return aws.Endpoint{
-						URL:           mockServer.URL,
-						SigningRegion: region,
-					}, nil
-				})),
+			config.WithBaseEndpoint(mockServer.URL),
 		)
 		if err != nil {
 			t.Fatalf("Failed to create AWS config with default chain: %v", err)
@@ -424,13 +390,7 @@ func TestAWSDefaultCredentialChain(t *testing.T) {
 				"explicit-secret-key",
 				"",
 			)),
-			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-				func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-					return aws.Endpoint{
-						URL:           mockServer.URL,
-						SigningRegion: region,
-					}, nil
-				})),
+			config.WithBaseEndpoint(mockServer.URL),
 		)
 		if err != nil {
 			t.Fatalf("Failed to create AWS config with explicit credentials: %v", err)

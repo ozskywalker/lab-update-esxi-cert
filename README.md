@@ -2,7 +2,7 @@
 
 A Golang utility for automating SSL certificate renewals for VMware ESXi hosts in lab environments using Let's Encrypt and AWS Route53.
 
-[![Go Version](https://img.shields.io/badge/Go-1.24.4-blue.svg)](https://golang.org/doc/devel/release.html)
+[![Go Version](https://img.shields.io/badge/Go-1.26.6-blue.svg)](https://golang.org/doc/devel/release.html)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 ![Claude Used](https://img.shields.io/badge/Claude-Used-4B5AEA)
 
@@ -28,7 +28,7 @@ Key features:
 ## Prerequisites
 
 - binaries: Windows (x86-64 or ARM64), Linux (x86-64/ARM64), or macOS (Apple Silicon or Intel)
-- building from source: go 1.24.4
+- building from source: go 1.26.6
 - AWS Account with Route53 access
 - VMware ESXi 6.7 host(s)
 - Domain name configured in AWS Route53
