@@ -1,0 +1,12 @@
+# Normalize line endings to LF for text files.
+# This prevents spurious diffs on Windows caused by CRLF being committed for
+# files that tooling (Go, git, CI) expects to be LF.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf
